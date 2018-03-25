@@ -8,6 +8,7 @@
  *
  *  Revision History
  *  ----------------
+ *	2018-03-03 7.10 Add Smart Screens as a parent for on/off
  *	2018-03-03 7.00 Component based, Graph, Mood, RSSI, BATTERY
  *	2018-01-28 6.00 Check state before issue on or off, dont with same state
  *	2017-12-31 5.02	Added power today and total to powerToday event, changed tile to display
@@ -134,22 +135,26 @@ def refresh() {
 
 // switch.on() command handler
 def on() {
-	if (device.currentValue("switch").toUpperCase() == "ON") return
+	if (device.currentValue("switch")?.toUpperCase() == "ON") return
     
+    if (parent.name == "Smart Screens") sendEvent(name: "switch", value: "on")
     if (parent.name == "Domoticz Server") parent.domoticz_on(getIDXAddress())
     if (parent.name == "Hue Sensor (Connect)") parent.groupCommand(["command" : "on", "dni": device.deviceNetworkId])
 }
 
 // switch.off() command handler
 def off() {
-	if (device.currentValue("switch").toUpperCase() == "OFF") return
+	if (device.currentValue("switch")?.toUpperCase() == "OFF") return
     
+    if (parent.name == "Smart Screens") sendEvent(name: "switch", value: "off")
     if (parent.name == "Domoticz Server") parent.domoticz_off(getIDXAddress())
     if (parent.name == "Hue Sensor (Connect)") parent.groupCommand(["command" : "off", "dni": device.deviceNetworkId])
 }
 
 // Custom setlevel() command handler
 def setLevel(level) {
+	if (parent.name.matches("Domoticz Server|Hue Sensor (Connect)") == false) return
+    
     TRACE("setLevel Level " + level)
     state.setLevel = level
 
@@ -165,6 +170,8 @@ def setColorTemperature(ct) {
 
 // Custom setcolor() command handler hue from ST is percentage of 360 which is max HUE
 def setColor(color) {
+	if (parent.name.matches("Domoticz Server|Hue Sensor (Connect)") == false) return
+    
 	log.trace "[setColor] " + color
 	def hexCode = null
 
