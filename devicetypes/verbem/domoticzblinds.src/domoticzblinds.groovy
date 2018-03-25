@@ -80,9 +80,9 @@ metadata {
                 action:"open"
         }
 
-        standardTile("Stop", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
-            state "default", label:'Stop', icon:"st.doors.garage.garage-open",
-                action:"stop"
+        standardTile("Preset", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
+            state "default", label:'Preset', icon:"st.doors.garage.garage-open",
+                action:"presetPosition"
         }
 
         standardTile("Down", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
@@ -113,7 +113,7 @@ metadata {
         childDeviceTile("cloudCover", "SmartScreens", decoration: "flat", width: 2, height: 2, childTileName: "cloudCover")
         
         main(["richDomoticzBlind"])
-	    details(["richDomoticzBlind", "Up", "Stop", "Down", "Cal", "rssi", "Refresh", "windBearing", "windSpeed", "sunBearing", "cloudCover"])
+	    details(["richDomoticzBlind", "Up", "Preset", "Down", "Cal", "rssi", "Refresh", "windBearing", "windSpeed", "sunBearing", "cloudCover"])
 
     }    
 }
@@ -211,6 +211,9 @@ def handlerEod(data) {
         break;
     case "Down":
     	close()
+        break;
+    case "Preset":
+    	presetPosition()
         break;
     case "Stop":
     	stop()
