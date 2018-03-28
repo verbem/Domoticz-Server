@@ -40,7 +40,8 @@ def on() {
 
 def buttonPress() {
 	sendEvent(name:"button", value: "pushed", data: [buttonNumber: 1], descriptionText: "$device.displayName button ${device.displayName.split("=")[1]} was pushed", isStateChange: true)
-	parent.callMood(device.displayName.split("=")[1])
+	if (parent.parent.name == "Hue Sensor (Connect)") parent.callEffect(device.displayName.split("=")[1])
+    if (parent.parent.name == "Domoticz Server") parent.callMood(device.displayName.split("=")[1])
 }
 
 def installed() {

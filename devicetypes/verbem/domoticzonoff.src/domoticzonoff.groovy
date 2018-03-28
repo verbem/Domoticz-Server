@@ -19,6 +19,7 @@
  *  2017-04-14 3.12 Multistate support for DZ selector
  *  2017-01-25 3.09 Put in check for switch name in generateevent
  *	2017-01-18 3.08 get always an lowercase value for switch on/off in generateevent
+ *	2017-03-28 4.00	add Hue API effect/alert buttons
  */
  
 import Calendar.*
@@ -97,6 +98,12 @@ metadata {
 		childDeviceTile("Group Mood 3", "Group Mood 3", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
 		childDeviceTile("Group Mood 4", "Group Mood 4", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
 		childDeviceTile("Group Mood 5", "Group Mood 5", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
+        
+		childDeviceTile("Effect None", "Effect None", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
+		childDeviceTile("Effect Colorloop", "Effect Colorloop", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
+		childDeviceTile("Alert None", "Alert None", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
+		childDeviceTile("Alert Select", "Alert Select", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
+		childDeviceTile("Alert Lselect", "Alert Lselect", decoration: "flat", width: 2, height: 1, childTileName: "stateButton")
 
 		childDeviceTile("sensorSignalStrength", "Signal Strength", decoration: "flat", width: 1, height: 1, childTileName: "sensorSignalStrength")   
 		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")   
@@ -108,20 +115,19 @@ metadata {
 		childDeviceTile("year", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "year")   
 
         main(["richDomoticzOnOff"])
-        details(["richDomoticzOnOff", "Group Off", "Group Mood 1", "Group Mood 2", "Group Mood 3", "Group Mood 4", "Group Mood 5", "sensorSignalStrength", "sensorBattery", "day", "week", "month", "year", "graph", "refresh"])
+        details(["richDomoticzOnOff", "Group Off", "Group Mood 1", "Group Mood 2", "Group Mood 3", "Group Mood 4", "Group Mood 5",
+        	"Effect None", "Effect Colorloop", "Alert None", "Alert Select", "Alert Lselect",
+        	"sensorSignalStrength", "sensorBattery", "day", "week", "month", "year", "graph", "refresh"])
     }
 }
 
 // switch.poll() command handler
 def poll() {
-
-	refresh()
-    
+	refresh()   
 }
 
 // switch.refresh() command handler
 def refresh() {
-
 
     if (parent.name == "Domoticz Server") {
     	parent.domoticz_poll(getIDXAddress())
@@ -283,24 +289,53 @@ def callMood(moodCommand) {
 }
 //END LIGHTWAVERF
 
+//HUE API EFFECT or ALERT
+def callEffect(hueCommand) {
+	
+    switch(hueCommand) {
+        case "Effect None":
+        	hueCommand = ["effect":"none", "alert":"none"]
+            break
+        case "Effect Colorloop":
+        	hueCommand = ["effect":"colorloop", "alert":"none"]
+            break
+        case "Alert None":
+        	hueCommand = ["effect":"none", "alert":"none"]
+            break
+        case "Alert Select":
+        	hueCommand = ["effect":"none", "alert":"select"]
+            break
+        case "Alert Lselect":
+        	hueCommand = ["effect":"none", "alert":"lselect"]
+            break
+	}
+	parent.configHueRoomEffects([dni:getIDXAddress(), effect: hueCommand])
+}
+//END LIGHTWAVERF
+
+
 def configure(type) {  
 
     def children = getChildDevices()
     def childExists = false
     def devType = "domoticzOnOff"
+    def subType = type
 
     children.each { child ->
         if (!childExists) childExists = child.deviceNetworkId.contains(type.toString())   	
     }
     
+	if (type.toString().contains("Effect")) type = "Button"
+	if (type.toString().contains("Alert")) type = "Button"
 	if (type.toString().contains("Group")) type = "Button"
+    
 	if (type.toString().matches("Signal Strength|Battery")) devType = "domoticzSensor "
     if (!childExists) {
-        log.info "Adding capability ${type}"
+        log.info "Adding capability ${subType}"
         addChildDevice("${devType}${type}", 
-                       "${device.displayName}=${type}", 
+                       "${device.displayName}=${subType}", 
                        null, 
-                       [completedSetup: true, label: "${device.displayName}=${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
+                       [completedSetup: true, label: "${device.displayName}=${subType}", isComponent: true, componentName: "${subType}", componentLabel: "${subType}"])
 	}                   
 }
 
