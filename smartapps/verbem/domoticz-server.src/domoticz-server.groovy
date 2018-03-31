@@ -23,6 +23,8 @@
     V6.19	Added call to uCount to capture notifications that are for non-specific devices
     V7.00	Restructured Sensor Component, Thermostat, Motion, OnOff, now very dynamic with adding new capabilities
     V7.01	Push notification when customURL is invalid in Domoticz (access token was changed)
+    V7.02	heartbeat to 5 minutes
+    V7.03	customUrl is now copyable
  */
 
 import groovy.json.*
@@ -30,7 +32,7 @@ import groovy.time.*
 import java.Math.*
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.00"}
+private def runningVersion() {"7.03"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 definition(
@@ -146,7 +148,13 @@ private def setupMenu() {
         install     : true,
         uninstall   : state.setup.installed
     ]
-
+    
+    def inputUrl = [
+        name        : "domoticzUrl",
+        type        : "text",
+        title       : "HTTP Custom Action URL for Domoticz",
+        defaultValue: state.urlCustomActionHttp
+    ]
 	return dynamicPage(pageProperties) {
         section {
             href "setupDomoticz", title:"Configure Domoticz Server", description:"Tap to open"
@@ -164,7 +172,8 @@ private def setupMenu() {
             label title:"Assign a name", required:false
         }
         section("HTTP Custom Action URL for Domoticz") {
-            paragraph "${state.urlCustomActionHttp}"
+            input inputUrl
+            href(name: "Domoticz Setup", title: "Domoticz Setup",required: false, style: "external", url: "http://${state.networkId}/#/Setup", description: "Tap to goto Domoticz Setup page")
             paragraph "Valid setting in Domoticz? : ${state.validUrl}"
         }        
         section("About") {
@@ -532,7 +541,7 @@ private def setupRefreshToken() {
     return dynamicPage(pageProperties) {
         section {
             paragraph "The Access Token has been refreshed"
-            paragraph "${state.urlCustomActionHttp}"
+            //paragraph "${state.urlCustomActionHttp}"
             paragraph "Tap Next to continue."
         }
     }
@@ -669,7 +678,7 @@ private def initialize() {
         state.runUpdateRoutine = runningVersion()
     }    
     
-    runEvery1Minute(aliveChecker)        
+    runEvery5Minutes(aliveChecker)        
     schedule("2015-01-09T12:00:00.000-0600", notifyNewVersion)   
 }
 
@@ -1487,6 +1496,7 @@ def callbackListHardware(evt) {
 def callbackForSettings(evt) {
     def response = getResponse(evt)
 	if (response.HTTPURL == null) return
+	log.error evt.headers
 
     def decoded = response.HTTPURL.decodeBase64()
     def httpURL = new String(decoded)
@@ -2412,6 +2422,8 @@ private def initRestApi() {
 private def getResponse(evt) {
 
     if (evt instanceof physicalgraph.device.HubResponse) {
+    	//def msg = parseEventMessage(evt.description)
+        //log.info evt.headers
         return evt.json
     }
 }
