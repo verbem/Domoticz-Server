@@ -25,14 +25,17 @@
     V7.01	Push notification when customURL is invalid in Domoticz (access token was changed)
     V7.02	heartbeat to 5 minutes
     V7.03	customUrl is now copyable
+    V7.04	check return in callbackforsettings
  */
 
 import groovy.json.*
 import groovy.time.*
 import java.Math.*
+import java.net.URLEncoder
+import java.util.regex.Pattern
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.03"}
+private def runningVersion() {"7.04"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 definition(
@@ -615,6 +618,7 @@ def uninstalled() {
 
 private def initialize() {
     TRACE("[Initialize] ${app.name}. ${textVersion()}. ${textCopyright()}")
+    socketSend([request: "Settings"])    
     notifyNewVersion()
     
     unschedule()    
@@ -683,6 +687,7 @@ private def initialize() {
 }
 
 private def runUpdateRoutine() {
+
 }
 
 private def clearAllNotifications() {
@@ -1495,16 +1500,50 @@ def callbackListHardware(evt) {
 /*-----------------------------------------------------------------------------------------*/
 def callbackForSettings(evt) {
     def response = getResponse(evt)
-	if (response.HTTPURL == null) return
-	log.error evt.headers
+    
+    if (response?.status != "OK") {
+        log.error "[callbackForSettings] ${evt}"
+    	log.error "[callbackForSettings] ${response}"
+        return
+    }
 
+	if (response?.HTTPURL == null) return
+      
+	/* response.PushoverUser = "TEST"
+    response.HTTPURL = state.urlCustomActionHttp
+    
+    if (response.HTTPEnabled != 1) response.HTTPEnabled = 1
+	
+    def encoded = response.collect { k,v -> "${URLEncoder.encode(k.toString())}=${URLEncoder.encode(v.toString())}" }.join("&") */
+    
     def decoded = response.HTTPURL.decodeBase64()
     def httpURL = new String(decoded)
-    TRACE("[callbackForSettings] ${httpURL} ${httpURL.contains(state.urlCustomActionHttp)}")
-    state.validUrl = httpURL.contains(state.urlCustomActionHttp)
-    if (!state.validUrl) sendNotification("CustomUrl in Domoticz Notifications Settings is invalid", [method: "push"])
+    TRACE("[callbackForSettings] ${httpURL} ${state.urlCustomActionHttp}")
+
+    if (httpURL != state.urlCustomActionHttp) {
+    	state.validUrl = false
+    	sendNotification("CustomUrl in Domoticz Notifications Settings is invalid", [method: "push"])
+	}  
+    else state.validUrl = true 
+    	
+        /* def hubAction = new physicalgraph.device.HubAction(
+                        method: "POST",
+                        path: "/storesettings.webem",
+                        requestContentType: "application/x-www-form-urlencoded",
+                        headers: [HOST: "${state.networkId}"],
+                        null,
+                        body: encoded,
+                        [callback: callbackPostSettings] )
+
+         sendHubCommand(hubAction) */
+
 }
 
+def callbackPostSettings(evt) {
+    def response = getResponse(evt)
+    log.error evt
+	
+}
 /*-----------------------------------------------------------------------------------------*/
 /*		callback after creation of the virtual sensor/device it will provide the new IDX
 /*		call for the provided device, this will create the link between IDX and NAME
@@ -1751,7 +1790,7 @@ private def createAttributes(domoticzDevice, domoticzStatus, addr) {
                 }
             	break;
             case "Type":
-				if (v == "RFY") attributeList.put('somfySupported', true)
+				if (v == "RFY") domoticzDevice.configure(setState : [name : "somfySupported", value : true])
             	break;
        }    
     }
@@ -2422,8 +2461,6 @@ private def initRestApi() {
 private def getResponse(evt) {
 
     if (evt instanceof physicalgraph.device.HubResponse) {
-    	//def msg = parseEventMessage(evt.description)
-        //log.info evt.headers
         return evt.json
     }
 }
