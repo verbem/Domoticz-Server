@@ -1502,8 +1502,10 @@ def callbackForSettings(evt) {
     def response = getResponse(evt)
     
     if (response?.status != "OK") {
-        log.error "[callbackForSettings] ${evt}"
-    	log.error "[callbackForSettings] ${response}"
+        log.error "[callbackForSettings evt: ] ${evt}"
+       	log.error "[callbackForSettings evt.status: ] ${evt?.status}"
+       	log.error "[callbackForSettings evt.error: ] ${evt?.error}"
+        log.error "[callbackForSettings response: ] ${response}"
         return
     }
 
