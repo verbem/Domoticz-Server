@@ -26,6 +26,7 @@
     V7.02	heartbeat to 5 minutes
     V7.03	customUrl is now copyable
     V7.04	check return in callbackforsettings
+    V7.05	possibility in composite device to select 2 custom (type=general) devices
  */
 
 import groovy.json.*
@@ -265,6 +266,12 @@ private def setupCompositeSensorsAssignment(iMap) {
 
                 paragraph image:"http://cdn.device-icons.smartthings.com/Entertainment/entertainment3-icn@2x.png", "Sound Sensor"
                 input "idxSound[${iMap.idx}]", "enum", options: state.optionsSound, required: false 
+
+                paragraph image:"http://cdn.device-icons.smartthings.com/Office/office11-icn@2x.png", "Custom Sensor#1"
+                input "idxCustom1[${iMap.idx}]", "enum", options: state.optionsCustom, required: false 
+
+                paragraph image:"http://cdn.device-icons.smartthings.com/Office/office11-icn@2x.png", "Custom Sensor#2"
+                input "idxCustom2[${iMap.idx}]", "enum", options: state.optionsCustom, required: false 
 
             }
     	}
@@ -644,6 +651,8 @@ private def initialize() {
     state.optionsPressure		= [:]
     state.optionsAirQuality		= [:]
 	state.optionsSound			= [:]
+	state.optionsCustom			= [:]
+
     
     updateDeviceList()
 	addReportDevices()
@@ -771,6 +780,12 @@ private def assignSensorToDevice() {
                     break;
                     case "idxTemperature":
                     component = "Temperature Measurement"
+                    break;
+                    case "idxCustom1":
+                    component = "Custom Sensor 1"
+                    break;
+                    case "idxCustom2":
+                    component = "Custom Sensor 2"
                     break;
                 }
                 if (component) {
@@ -1021,6 +1036,11 @@ void callbackForUCount(evt) {
         // Sound Level
     	if (utility?.SubType == "Sound Level") {
         	doUtilityEvent([idx: utility.idx, idxName: "idxSound", name:"soundPressureLevel", value:utility.Data.split()[0].toInteger()])
+        }	        
+        // Custom / general
+    	if (utility?.Type == "General") {
+        	doUtilityEvent([idx: utility.idx, idxName: "idxCustom1", name:"customStatus1", value:utility.Data])
+        	doUtilityEvent([idx: utility.idx, idxName: "idxCustom2", name:"customStatus2", value:utility.Data])
         }	        
         // Air Quality
     	if (utility?.Type == "Air Quality") {
@@ -1313,6 +1333,11 @@ def callbackForEveryThing(evt) {
         if (it?.SubType == "Sound Level") {
         	state.optionsSound[it.idx] = "${it.idx} : ${it.Name}"
             if (it.Notifications == "false") socketSend([request : "SensorSoundNotification", idx : it.idx])
+        }
+        //CUSTOM
+        if (it?.Type == "General") {
+        	state.optionsCustom[it.idx] = "${it.idx} : ${it.Name}"
+            //if (it.Notifications == "false") socketSend([request : "SensorSoundNotification", idx : it.idx])
         }
         //AIR QUAILTY
         if (it?.Type == "Air Quality") {
