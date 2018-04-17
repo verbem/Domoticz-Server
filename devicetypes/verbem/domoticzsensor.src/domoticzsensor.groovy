@@ -55,15 +55,17 @@ metadata {
 		childDeviceTile("sensorTemperature", "Temperature Measurement", decoration: "flat", width: 2, height: 2, childTileName: "sensorTemperature")   
 		childDeviceTile("sensorSignalStrength", "Signal Strength", decoration: "flat", width: 2, height: 2, childTileName: "sensorSignalStrength")   
 		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")   
+		childDeviceTile("sensorStatus1", "Custom Sensor 1", decoration: "flat", width: 2, height: 2, childTileName: "sensorStatus")   
+		childDeviceTile("sensorStatus2", "Custom Sensor 2", decoration: "flat", width: 2, height: 2, childTileName: "sensorStatus")   
 		
 		main "temperature"
-		details(["temperature", "sensorBattery", "sensorSignalStrength", "sensorHumidity", "sensorBarometricPressure", "sensorPower", "sensorIlluminance", "sensorAirQuality", "sensorSound", "sensorTemperature", "refresh"])
+		details(["temperature", "sensorBattery", "sensorSignalStrength", "sensorHumidity", "sensorBarometricPressure", "sensorPower", "sensorIlluminance", "sensorAirQuality", "sensorSound", "sensorTemperature", "sensorStatus1", "sensorStatus2", "refresh"])
 	}
 }
 def parse(Map message) {
 	def evt = createEvent(message)
     def capability
-    if (message.name.matches("airQuality|illuminance|soundPressureLevel|barometricPressure|humidity|battery|rssi")) {
+    if (message.name.matches("airQuality|illuminance|soundPressureLevel|barometricPressure|humidity|battery|customStatus1|customStatus2|rssi")) {
 
     	switch (message.name) {
         	case "airQuality":
@@ -93,7 +95,15 @@ def parse(Map message) {
         	case "rssi":
             capability = "Signal Strength"
             break
-        }
+        	case "customStatus1":
+            capability = "Custom Sensor 1"
+            message.name = "customStatus"
+            break        
+        	case "customStatus2":
+            capability = "Custom Sensor 2"
+            message.name = "customStatus"
+            break        
+            }
         if (capability) {
             getChildDevices().each { child ->
                 if (child.deviceNetworkId.split("-")[1] == capability) { 
@@ -139,14 +149,19 @@ private getIDXAddress() {
 def configure(type) {  
     def children = getChildDevices()
     def childExists = false
+    def deviceX = type
 
     children.each { child ->
         if (!childExists) childExists = child.deviceNetworkId.contains(type.toString())   	
     }
-    
+
+	if (type.matches("Custom Sensor 1|Custom Sensor 2")) {
+    	deviceX = "Custom Sensor"
+    }
+
     if (!childExists) {
         log.info "Adding capability ${type}"
-        addChildDevice("domoticzSensor ${type}", 
+        addChildDevice("domoticzSensor ${deviceX}", 
                        "${device.displayName}-${type}", 
                        null, 
                        [completedSetup: true, label: "${device.displayName}-${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
