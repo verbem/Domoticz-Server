@@ -165,7 +165,10 @@ def configure(type) {
                        "${device.displayName}-${type}", 
                        null, 
                        [completedSetup: true, label: "${device.displayName}-${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
-	}                   
+	}
+    else if (type?.action == "Delete") {
+    	log.info "Delete capability ${type?.capability}"
+    }
 }
 
 def installed() {

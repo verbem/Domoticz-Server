@@ -18,6 +18,7 @@
  *  3.1 2017-05-10 Adding end of day scheduling for blinds as an offset to sunset, these are set in the Smart Screens app. 
  *  3.2 2017-07-12 Adding HC and parent check
  *	4.0 2018-02-12 Add windowShade capability, fix eodDone
+ *	4.1	2018-04-05 Introduce configure for all non standard attributes and commands
  */
 import groovy.time.TimeCategory 
 import groovy.time.TimeDuration
@@ -34,28 +35,11 @@ metadata {
         capability "Switch Level"
         capability "Refresh"
         capability "Polling"
-        capability "Door Control"
         capability "Signal Strength"
 		capability "Health Check"
         capability "Window Shade"
-
-        // custom attributes
-        attribute "networkId", "string"
-        attribute "calibrationInProgress", "string" 
-        attribute "startCalibrationTime", "number"
-        attribute "endCalibrationTime", "number"
-        attribute "blindClosingTime", "number"
-        attribute "somfySupported", "enum", [true, false]
-        attribute "eodAction", "string"
-        attribute "eodTime", "string"
-        attribute "eodDone", "enum" , [true, false]
-
-        // custom commands
-        command "parse"     // (String "<attribute>:<value>[,<attribute>:<value>]")
-        command "stop"
-        command "setLevel"
-        command "calibrate"
-        command "eodRunOnce"
+        capability "Configuration"
+        capability "Sleep Sensor"
 
     }
 
@@ -73,7 +57,6 @@ metadata {
             	attributeState "level", action:"setLevel" 
             }
         }
- 
         
         standardTile("Up", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
             state "default", label:'Up', icon:"st.doors.garage.garage-opening",
@@ -92,7 +75,7 @@ metadata {
 
 		standardTile("Cal", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
             state "default", label:'Calibrate', icon:"st.doors.garage.garage-closing",
-                action:"calibrate"
+                action:"configure"
         }
 
         standardTile("Refresh", "device.refresh", width: 2, height: 2, inactiveLabel: false, decoration: "flat") {
@@ -102,11 +85,7 @@ metadata {
 		standardTile("rssi", "device.rssi", inactiveLabel: false, width: 2, height: 2, decoration:"flat") {
 			state "rssi", label:'Signal ${currentValue}', unit:"", icon:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/devicetypes/verbem/domoticzsensor.src/network-signal.png"
 		}
-        
-		standardTile("somfy", "device.somfySupported", inactiveLabel: false, width: 2, height: 2, decoration:"flat") {
-			state "somfySupported", label:'${currentValue}', unit:"", icon:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/devicetypes/verbem/domoticzblinds.src/Somfy.png"
-		}
-        
+              
 		childDeviceTile("windBearing", "SmartScreens", decoration: "flat", width: 2, height: 2, childTileName: "windBearing")   
         childDeviceTile("windSpeed", "SmartScreens", decoration: "flat", width: 2, height: 2, childTileName: "windSpeed")
         childDeviceTile("sunBearing", "SmartScreens", decoration: "flat", width: 2, height: 2, childTileName: "sunBearing")
@@ -136,7 +115,12 @@ def parse(Map message) {
 	return evt
 }
 
-// handle commands
+// handle commands, 
+def configure(command) {
+	if (command?.setState) state."${command.setState.name}" = command.setState.value
+	if (command?.eodRunOnce) eodRunOnce(command.eodRunOnce.time)
+    if (!command) calibrate()
+}
 
 def on() {
 	log.debug "on()"
@@ -144,7 +128,6 @@ def on() {
 		sendEvent(name:'windowShade', value:"closed" as String)
 		parent.domoticz_on(getIDXAddress())
     }
-
 }
 
 def off() {
@@ -165,6 +148,9 @@ def close() {
 
 def refresh() {
 	log.debug "refresh()"
+    state.each { k, v ->
+    	log.info "${k} : ${v}"
+    }
     if (parent) {
         parent.domoticz_poll(getIDXAddress())
     }
@@ -185,15 +171,6 @@ def open() {
     }
 }
 
-def stop() {
-	log.debug "stop()"
-    if (parent) {
-        sendEvent(name:'switch', value:"Stopped" as String)
-        presetPosition()
-    }
-
-}
-
 def presetPosition() {
 	log.debug "presetPosition()"
     if (parent) {
@@ -204,7 +181,8 @@ def presetPosition() {
 }
 
 def handlerEod(data) {
-	sendEvent(name:"eodDone", value: true)
+	state.eodDone = true
+    sendEvent(name:"sleeping", value:"sleeping")
     switch (data.eodAction) {
     case "Up":
     	open()	
@@ -214,9 +192,6 @@ def handlerEod(data) {
         break;
     case "Preset":
     	presetPosition()
-        break;
-    case "Stop":
-    	stop()
         break;
     default:
         log.error "Non handled eodAction(${tempEodAction})"
@@ -228,10 +203,10 @@ def setLevel(level) {
 	log.debug "setLevel() level ${level}"
 	state.level = level   
     if (parent) {
-    	if (device.currentValue("blindClosingTime")) {
-        	if (device.currentValue("blindClosingTime") > 0 && device.currentValue("blindClosingTime") < 100000) {
+    	if (state?.blindClosingTime) {
+        	if (state.blindClosingTime > 0 && state.blindClosingTime < 100000) {
         		parent.domoticz_off(getIDXAddress())
-				def Sec = Math.round(device.currentValue("blindClosingTime").toInteger()/1000)
+				def Sec = Math.round(state.blindClosingTime.toInteger()/1000)
 				runIn(Sec, setLevelCloseAgain)           
 				log.debug "setLevel() ON in ${Sec} s"         		
             }
@@ -246,7 +221,7 @@ def setLevel(level) {
 
 def setLevelCloseAgain() {
     parent.domoticz_on(getIDXAddress())
-    def Sec = Math.round(device.currentValue("blindClosingTime").toInteger()/1000)
+    def Sec = Math.round(state.blindClosingTime.toInteger()/1000)
 	Sec = Math.round(Sec*state.level.toInteger()/100) - 1
     log.debug "setLevel() Stop in ${Sec} s"
     runIn(Sec, setLevelStopAgain)
@@ -267,24 +242,24 @@ def setLevelStopAgain() {
 
 def calibrate() {
     
-    if (device.currentValue("calibrationInProgress") == "yes")
+    if (state?.calibrationInProgress == "yes")
     	{
-        sendEvent(name: "calibrationInProgress", value: "no")
+        state.calibrationInProgress = "no"
         def eTime = new Date().time
-        sendEvent(name: "endCalibrationTime", value: eTime)
-        def eT = device.currentValue("endCalibrationTime")
-        def sT = device.currentValue("startCalibrationTime")
+        state.endCalibrationTime = eTime
+        def eT = state.endCalibrationTime
+        def sT = state.startCalibrationTime
         def blindClosingTime = (eT - sT)
-        sendEvent(name: "blindClosingTime", value: blindClosingTime)
-		log.debug "Calibrate End() - blindClosingTime ${device.currentValue("blindClosingTime")} ms"       
+        state.blindClosingTime = blindClosingTime
+		log.debug "Calibrate End() - blindClosingTime ${state.blindClosingTime} ms"       
         parent.domoticz_off(getIDXAddress())
         }
     else
     	{
 		log.debug "Calibrate Start()"       
-        sendEvent(name: "calibrationInProgress", value: "yes")
+        state.calibrationInProgress = "yes"
         def sTime = new Date().time
-        sendEvent(name: "startCalibrationTime", value: sTime)
+        state.startCalibrationTime = sTime
         parent.domoticz_on(getIDXAddress())
         }
 }
@@ -294,10 +269,11 @@ def eodRunOnce(tempTime) {
     def children = getChildDevices()
     
 	if (!children) 	createComponent()
-    
-    def tempEodAction = device.currentValue("eodAction")
+    log.info tempTime
+    def tempEodAction = state.eodAction
     runOnce(tempTime, handlerEod, [overwrite: false, data: ["eodAction": tempEodAction]])
-    sendEvent(name:"eodDone", value:false)
+    state.eodDone = false
+    sendEvent(name:"sleeping", value:"not sleeping")
 }
 
 private def createComponent() {
@@ -381,6 +357,8 @@ def installed() {
 }
 
 def updated() {
+	if (state.eodDone == true) sendEvent(name:"sleeping", value:"sleeping")
+    else sendEvent(name:"sleeping", value:"not sleeping")
 	initialize()
 }
 
