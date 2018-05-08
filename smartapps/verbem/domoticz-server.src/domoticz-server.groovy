@@ -29,6 +29,7 @@
     V7.05	possibility in composite device to select 2 custom (type=general) devices
     V7.06	Some maint on the custom sensor, add subtype energy/gas to report select
     V7.10	Restructure of the way status is updated from the sensors
+    V7.11	Bug fixes
  */
 
 import groovy.json.*
@@ -38,7 +39,7 @@ import java.net.URLEncoder
 import java.util.regex.Pattern
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.10"}
+private def runningVersion() {"7.11"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 definition(
@@ -1142,10 +1143,10 @@ void callbackForScenes(evt) {
         TRACE("[callbackForScenes] ${it.Type} ${it.Name} ${it.Status} ${it.Type}")
         switch (it.Type) {
         case "Scene":
-            if (domoticzScene) {defineDomoticzInSmartThings([idx:it.idx, deviceType: "domoticzScene", name: it.Name, dzStatus: it.Status, updateEvents:false])}
+            if (domoticzScene) {defineDomoticzInSmartThings([idx:it.idx, deviceType: "domoticzScene", subType: "Scene", name: it.Name, dzStatus: it.Status, updateEvents:false])}
             break;
         case "Group":
-            if (domoticzGroup) {defineDomoticzInSmartThings([idx:it.idx, deviceType: "domoticzScene", name: it.Name, dzStatus: it.Status, updateEvents:false])}
+            if (domoticzGroup) {defineDomoticzInSmartThings([idx:it.idx, deviceType: "domoticzScene", subType: "Group", name: it.Name, dzStatus: it.Status, updateEvents:false])}
             break;
         }    
     }
@@ -1495,26 +1496,28 @@ def handleList(evt) {
     def dzDeletedList = currentIdxList.minus(nextIdxList)
     log.info "Deleted, remove child devices " + dzDeletedList
     
-    def stateIdxList = state.devices.collect {it.key}.sort()
-    def stateToDeleteList = stateIdxList.minus(nextIdxList)
-    
-    dzDeletedList.each { idx ->
-    	try {
-    		deleteChildDevice(app.id + ":IDX:" + idx)
+	if (state.devices) {
+		def stateIdxList = state.devices.collect {it.key}.sort()
+        def stateToDeleteList = stateIdxList.minus(nextIdxList)
+
+        dzDeletedList.each { idx ->
+            try {
+                deleteChildDevice(app.id + ":IDX:" + idx)
+            }
+            catch (e) {
+                log.error "[handleList] error deleting child ${app.id + ":IDX:" + idx}"
+            }
         }
-        catch (e) {
-        	log.error "[handleList] error deleting child ${app.id + ":IDX:" + idx}"
-        }
-    }
+
+        log.info "Delete from State devices " + stateToDeleteList    
+        stateToDeleteList.each {state.devices.remove(it)}
+
+        def childIdxList = getChildDevices().collect { if (it.deviceNetworkId.tokenize(":")[2] != "10000") it.deviceNetworkId.tokenize(":")[2]}.findAll{it != null}.sort()
+
+        log.info "state size : " + state.devices.collect {it.key}.size()
+        log.info "childs : " + childIdxList.size()
+	}
     
-    log.info "Delete from State devices " + stateToDeleteList    
-    stateToDeleteList.each {state.devices.remove(it)}
-    
-    def childIdxList = getChildDevices().collect { if (it.deviceNetworkId.tokenize(":")[2] != "10000") it.deviceNetworkId.tokenize(":")[2]}.findAll{it != null}.sort()
-    
-    log.info "state size : " + state.devices.collect {it.key}.size()
-    log.info "childs : " + childIdxList.size()
-	
 	state.listInprogress = true
     pause 2
     callbackForDevices(response)    
