@@ -506,7 +506,7 @@ private def setupDeviceRequest() {
 private def setupAddDevices() {
     TRACE("[setupAddDevices]")
 
-	updateDeviceList()
+	refreshDevicesFromDomoticz()
 
     def pageProperties = [
         name        : "setupAddDevices",
@@ -516,28 +516,9 @@ private def setupAddDevices() {
         uninstall   : false
     ]
     
-	state.listOfRoomPlanDevices = []
-    pause 3
-    if (domoticzRoomPlans)
-    	{
-        settings.domoticzPlans.each { v ->       	
-        	state.statusPlansRsp.each {
-            if (v == it.Name) {
-            	socketSend([request: "roomplan", idx: idx])
-                pause 10
-                }
-        	}
-          }
-        }
-
-	socketSend([request : "List"])
-    pause 10
-    socketSend([request : "scenes"])
-	pause 10
-
     return dynamicPage(pageProperties) {
         section {
-            paragraph "Requested Domoticz Devices have been added to SmartThings"
+            paragraph "Domoticz Devices are being added to SmartThings"
             paragraph "Tap Next to continue."
         }
     }
@@ -619,7 +600,6 @@ def updated() {
 
 def uninstalled() {
     TRACE("[uninstalled]")
-    unsubscribe()
     unschedule()
 	// delete ST HARDWARE in DZ
     if (settings?.domoticzVirtualDevices == true) socketSend([request:"DeleteHardware"])
@@ -705,7 +685,8 @@ private def initialize() {
         state.runUpdateRoutine = runningVersion()
     }    
     
-    runEvery5Minutes(aliveChecker)        
+	aliveChecker()
+	runEvery5Minutes(aliveChecker)        
     schedule("2015-01-09T12:00:00.000-0600", notifyNewVersion)   
 }
 
@@ -725,7 +706,7 @@ private def clearAllNotifications() {
 	def options = state.findAll { key, value -> key.startsWith("options") }
     options.each { key, sensor ->
     	sensor.each { idx, content ->
-        	TRACE("Clear Notifications for Sensor ${content} idx ${item.idx}")
+        	TRACE("Clear Notifications for Sensor ${content} idx ${idx}")
         	socketSend([request : "ClearNotification", idx : idx])
             pause 2        
         }
@@ -2386,7 +2367,9 @@ void refreshDevicesFromDomoticz() {
 /*		Domoticz will send an notification message to ST for all devices THAT HAVE BEEN SELECTED to do that
 /*-----------------------------------------------------------------------------------------*/
 def eventDomoticz() {
-
+	
+    aliveResponse()
+    
 	if (settings?.domoticzVirtualDevices == true) {
         if (params.message.contains("IDX ") && params.message.split().size() == 3) {
             def idx = params.message.split()[1]
