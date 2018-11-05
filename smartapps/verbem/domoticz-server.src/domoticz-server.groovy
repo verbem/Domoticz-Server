@@ -31,6 +31,7 @@
     V7.10	Restructure of the way status is updated from the sensors
     V7.11	Bug fixes
     V7.12	Decode needed for LevelNames with last stable of DZ
+    V7.13	open closed in lowercase
  */
 
 import groovy.json.*
@@ -40,7 +41,7 @@ import java.net.URLEncoder
 import java.util.regex.Pattern
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.12"}
+private def runningVersion() {"7.13"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 definition(
@@ -2411,7 +2412,7 @@ def eventDomoticz() {
                 break
             case "domoticzContact":
             	attr = "contact"
-                if (status == "on") status = "Open" else status = "Closed"
+                if (status == "on") status = "open" else status = "closed"
                	break
             case "domoticzThermostat":
             	attr = "thermostatSetpoint"
