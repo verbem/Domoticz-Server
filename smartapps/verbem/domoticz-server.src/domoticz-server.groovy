@@ -32,6 +32,7 @@
     V7.11	Bug fixes
     V7.12	Decode needed for LevelNames with last stable of DZ
     V7.13	open closed in lowercase
+    V7.14	selector switch problem with Off
  */
 
 import groovy.json.*
@@ -41,7 +42,7 @@ import java.net.URLEncoder
 import java.util.regex.Pattern
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.13"}
+private def runningVersion() {"7.14"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 definition(
@@ -139,8 +140,10 @@ private def setupWelcome() {
 /*-----------------------------------------------------------------------------------------*/
 private def setupMenu() {
     TRACE("[setupMenu]")
+    def urlCAH
     if (state.accessToken) {
 		state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
+		urlCAH = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
         if (!state.validUrl) state.validUrl = false
         socketSend([request: "Settings"])
         pause 5
@@ -162,7 +165,7 @@ private def setupMenu() {
         name        : "domoticzUrl",
         type        : "text",
         title       : "HTTP Custom Action URL for Domoticz",
-        defaultValue: state.urlCustomActionHttp
+        defaultValue: urlCAH
     ]
 	return dynamicPage(pageProperties) {
         section {
@@ -1981,8 +1984,11 @@ def domoticz_mood(nid, mood) {
 }
 
 def domoticz_poll(nid) {
-    socketSend([request : "status", idx : nid])
-    socketSend([request : "utilityCount", idx : nid])
+	if (state.devices[nid] != "sensor") 
+        socketSend([request : "status", idx : nid])
+    else
+        socketSend([request : "utilityCount", idx : nid])
+        
     // also put out poll requests for composite parts of a device e.g. idxPower=idx, idxIlluminance
     state.devices[nid].each { name, value ->
     	if (name.startsWith("idx") && name.length() > 3 && value != nid) {
@@ -2021,8 +2027,9 @@ def domoticz_stop(nid) {
 
 def domoticz_setlevel(nid, xLevel) {
     if (xLevel.toInteger() == 0) {
+    	log.info "setlevel " + xLevel 
         socketSend([request : "setlevel", idx : nid, level : xLevel])
-    	socketSend([request : "off", idx : nid])
+    	//socketSend([request : "off", idx : nid])
     }    
     else {
         if (state.devices[nid].subType == "RFY") {
@@ -2349,7 +2356,7 @@ void refreshDevicesFromDomoticz() {
 def eventDomoticz() {
 	
     aliveResponse()
-    
+    log.trace params
 	if (settings?.domoticzVirtualDevices == true) {
         if (params.message.contains("IDX ") && params.message.split().size() == 3) {
             def idx = params.message.split()[1]
@@ -2405,7 +2412,9 @@ def eventDomoticz() {
             	break
             case "domoticzSelector":
             	attr = "switch"
-				if (status == "off") level = 0
+				if (status == "off") {
+                	level = 0
+                    }
                 break
             case "domoticzDuskSensor":
             	attr = "switch"
@@ -2436,11 +2445,11 @@ def eventDomoticz() {
             if (attr) {
         		TRACE("[eventDomoticz] IDX(${deviceType}) with STATE and Attr ${params.message}")
                 getChildDevice(dni).sendEvent(name: attr, value: status)
-
                 if (level != "") {
                     // multiselector switches will have a level in their custom notification
+                    pause 3
                     getChildDevice(dni).sendEvent(name: "level", value: level)
-                    domoticz_poll(idx)
+                    //domoticz_poll(idx)
                     }
             }
             else {
