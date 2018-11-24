@@ -292,10 +292,10 @@ private def setupCompositeSensorsAssignment(iMap) {
                 input "idxPower[${iMap.idx}]", "enum", options: state.optionsPower, required: false
              
                 paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather1-icn@2x.png", "Thermostat FanMode"
-                input "idxFanMode[${key}]", "enum", options: state.optionsModes, required: false
+                input "idxFanMode[${iMap.idx}]", "enum", options: state.optionsModes, required: false
                 
                 paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png", "Thermostat Mode"
-                input "idxMode[${key}]", "enum", options: state.optionsModes, required: false
+                input "idxMode[${iMap.idx}]", "enum", options: state.optionsModes, required: false
 
                 paragraph image:"http://cdn.device-icons.smartthings.com/Home/home29-icn@2x.png", "Gas Meter"
                 input "idxGas[${iMap.idx}]", "enum", options: state.optionsGas, required: false
@@ -2447,9 +2447,8 @@ def eventDomoticz() {
                 getChildDevice(dni).sendEvent(name: attr, value: status)
                 if (level != "") {
                     // multiselector switches will have a level in their custom notification
-                    pause 3
                     getChildDevice(dni).sendEvent(name: "level", value: level)
-                    //domoticz_poll(idx)
+                    domoticz_poll(idx)
                     }
             }
             else {
