@@ -5,6 +5,7 @@
  *	Author: Martin Verbeek
  *	
  	V7.00	Initial release
+    V7.15	Humidity, Temp and a more forgiving setting of thermostat modes.
  
  */
 metadata {
@@ -13,6 +14,7 @@ metadata {
 		capability "Actuator"
 		capability "Thermostat"
 		capability "Temperature Measurement"
+        capability "Relative Humidity Measurement"
 		capability "Sensor"
         capability "Switch"
 		capability "Refresh"
@@ -47,17 +49,20 @@ multiAttributeTile(name:"thermostatFull", type:"thermostat", width:6, height:4) 
             attributeState("VALUE_UP", action:"raiseSetpoint", icon:"st.thermostat.thermostat-up")
             attributeState("VALUE_DOWN", action:"lowerSetpoint", icon:"st.thermostat.thermostat-down")
         }
-        tileAttribute("device.switch", key: "SECONDARY_CONTROL") {
-            attributeState("On", label:'On', unit:"", icon:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/devicetypes/verbem/domoticzblinds.src/Nefit Warm Water.PNG")
-            attributeState("Off", label:'Off', unit:"", icon:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/devicetypes/verbem/domoticzblinds.src/Nefit No Warm Water.PNG")
-        }
+        //tileAttribute("device.switch", key: "SECONDARY_CONTROL") {
+        //    attributeState("On", label:'On', unit:"", icon:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/devicetypes/verbem/domoticzblinds.src/Nefit Warm Water.PNG")
+        //    attributeState("Off", label:'Off', unit:"", icon:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/devicetypes/verbem/domoticzblinds.src/Nefit No Warm Water.PNG")
+        //}
+    	tileAttribute("device.humidity", key: "SECONDARY_CONTROL") {
+        	attributeState("humidity", label:'${currentValue}%', unit:"%", defaultState: true)
+    	}	
         tileAttribute("device.thermostatOperatingState", key: "OPERATING_STATE") {
             attributeState("idle", backgroundColor:"#00A0DC")
             attributeState("heating", backgroundColor:"#e86d13")
             attributeState("cooling", backgroundColor:"#00A0DC")
         }
         tileAttribute("device.thermostatMode", key: "THERMOSTAT_MODE") {
-            attributeState("thermostatMode", 	label:'${currentValue}')
+            attributeState("thermostatMode", label:'${currentValue}')
         }
         tileAttribute("device.coolingSetpoint", key: "COOLING_SETPOINT") {
             attributeState("coolingSetpoint", label:'${currentValue}', unit:"", defaultState: true)
@@ -93,24 +98,33 @@ void setThermostatMode(setMode) {
 	sendEvent(name: "thermostatMode", value: setMode)
     log.info "Mode ${setMode} has been set"
     def thermostatOperatingState
+    if (setMode != "emergency heat") {
+    	if (setMode.contains("heat")) setMode = "heat"
+    	if (setMode.contains("cool")) setMode = "cool"
+    	if (setMode.contains("dry")) setMode = "dry"
+    	if (setMode.contains("auto")) setMode = "auto"
+    }
     
     switch (setMode) {
+    case "emergency heat":
+		thermostatOperatingState = "heating"
+    	break
     case "cool":
 		thermostatOperatingState = "cooling"
 		break
     case "heat":
 		thermostatOperatingState = "heating"
     	break
-    case "emergency heat":
-		thermostatOperatingState = "heating"
-    	break
     case "auto":
+		thermostatOperatingState = "idle"
+    	break
+    case "eco":
 		thermostatOperatingState = "idle"
     	break
     case "dry":
 		thermostatOperatingState = "fan only"
     	break
-     case "off":
+    case "off":
 		thermostatOperatingState = "idle"
     	break
    default:
