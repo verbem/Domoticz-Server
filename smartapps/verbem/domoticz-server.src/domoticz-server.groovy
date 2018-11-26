@@ -33,6 +33,7 @@
     V7.12	Decode needed for LevelNames with last stable of DZ
     V7.13	open closed in lowercase
     V7.14	selector switch problem with Off
+    V7.15	temperature for thermostat in composite creation
  */
 
 import groovy.json.*
@@ -285,6 +286,9 @@ private def setupCompositeSensorsAssignment(iMap) {
     	}
     	if (iMap.type == "domoticzThermostat") {
             section {           
+                paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png", "Temperature Measurement"
+                input "idxTemperature[${iMap.idx}]", "enum", options: state.optionsTemperature, required: false 
+                
                 paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather12-icn@2x.png", "Relative Humidity Measurement"
                 input "idxHumidity[${iMap.idx}]", "enum", options: state.optionsHumidity, required: false   
 
