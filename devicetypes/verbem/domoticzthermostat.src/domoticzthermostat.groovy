@@ -5,7 +5,7 @@
  *	Author: Martin Verbeek
  *	
  	V7.00	Initial release
-    V7.15	Humidity, Temp and a more forgiving setting of thermostat modes.
+    V7.16	Humidity, Temp and a more forgiving setting of thermostat modes.
  
  */
 metadata {
@@ -96,15 +96,16 @@ multiAttributeTile(name:"thermostatFull", type:"thermostat", width:6, height:4) 
 }
 void setThermostatMode(setMode) {
 	sendEvent(name: "thermostatMode", value: setMode)
-    log.info "Mode ${setMode} has been set"
     def thermostatOperatingState
     if (setMode != "emergency heat") {
-    	if (setMode.contains("heat")) setMode = "heat"
-    	if (setMode.contains("cool")) setMode = "cool"
-    	if (setMode.contains("dry")) setMode = "dry"
-    	if (setMode.contains("auto")) setMode = "auto"
+    	if (setMode.toUpperCase().contains("HEAT")) setMode = "heat"
+    	if (setMode.toUpperCase().contains("COOL")) setMode = "cool"
+    	if (setMode.toUpperCase().contains("DRY")) setMode = "dry"
+    	if (setMode.toUpperCase().contains("AUTO")) setMode = "auto"
     }
     
+    log.info "Mode ${setMode} has been set"
+   
     switch (setMode) {
     case "emergency heat":
 		thermostatOperatingState = "heating"
