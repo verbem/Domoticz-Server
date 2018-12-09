@@ -102,6 +102,7 @@ void setThermostatMode(setMode) {
     	if (setMode.toUpperCase().contains("COOL")) setMode = "cool"
     	if (setMode.toUpperCase().contains("DRY")) setMode = "dry"
     	if (setMode.toUpperCase().contains("AUTO")) setMode = "auto"
+    	if (setMode.toUpperCase().contains("ECO")) setMode = "eco"
     }
     
     log.info "Mode ${setMode} has been set"
