@@ -33,7 +33,8 @@
     V7.12	Decode needed for LevelNames with last stable of DZ
     V7.13	open closed in lowercase
     V7.14	selector switch problem with Off
-    V7.15	temperature for thermostat in composite creation
+    V7.15	temperature for thermostat in composite creation, add callable function for selector device to reset notifications
+    V7.16	Temp not send to domoticzSensor native, changed doUtilityEvent to check if native sensor exists 
  */
 
 import groovy.json.*
@@ -42,22 +43,31 @@ import java.Math.*
 import java.net.URLEncoder
 import java.util.regex.Pattern
 
-private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.14"}
-private def textVersion() { return "Version ${runningVersion()}"}
-
 definition(
     name: "Domoticz Server",
     namespace: "verbem",
     author: "Martin Verbeek",
     description: "Connects to local Domoticz server and define Domoticz devices in ST",
     category: "My Apps",
-    singleInstance: false,
+    singleInstance: true,
     oauth: true,
     iconUrl: "http://www.thermosmart.nl/wp-content/uploads/2015/09/domoticz-450x450.png",
     iconX2Url: "http://www.thermosmart.nl/wp-content/uploads/2015/09/domoticz-450x450.png",
     iconX3Url: "http://www.thermosmart.nl/wp-content/uploads/2015/09/domoticz-450x450.png"
 )
+
+private def cleanUpNeeded() {return true}
+private def runningVersion() {"7.16"}
+private def textVersion() { return "Version ${runningVersion()}"}
+
+/*-----------------------------------------------------------------------------------------*/
+/*		Mappings for REST ENDPOINT to communicate events from Domoticz      
+/*-----------------------------------------------------------------------------------------*/
+mappings {
+    path("/EventDomoticz") {
+        action: [ GET: "eventDomoticz" ]
+    }
+}
 /*-----------------------------------------------------------------------------------------*/
 /*		PREFERENCES      
 /*-----------------------------------------------------------------------------------------*/
@@ -73,14 +83,6 @@ preferences {
     page name:"setupCompositeSensorsAssignment"
     page name:"setupSmartThingsToDomoticz"
 
-}
-/*-----------------------------------------------------------------------------------------*/
-/*		Mappings for REST ENDPOINT to communicate events from Domoticz      
-/*-----------------------------------------------------------------------------------------*/
-mappings {
-    path("/EventDomoticz") {
-        action: [ GET: "eventDomoticz" ]
-    }
 }
 
 /*-----------------------------------------------------------------------------------------*/
@@ -953,7 +955,8 @@ void callbackForUCount(evt) {
 		// Power usage    
     	if (utility?.SubType == "kWh") {
             doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value:Float.parseFloat(utility.Usage.split(" ")[0]).round(1)])
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerToday", value:"Now  :${utility.Usage}\nToday:${utility.CounterToday} Total:${utility.Data}"])          
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson(utility.Data)])          
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: Float.parseFloat(utility.Data.split(" ")[0]).round(1)])          
         }
         // Motion        
     	if (utility?.SwitchTypeVal == 8) {
@@ -1042,10 +1045,19 @@ private def doUtilityEvent(evt) {
         evt.name = "temperature"
         break    }
     
+	if (state.devices[evt.idx]?.dni) {
+        def nativeDni = state.devices[evt.idx].dni
+    	def nativeDev = getChildDevice(nativeDni)
+    	if (nativeDev.hasAttribute(evt.name) == true) {
+			TRACE("[doUtilityEvent] native idx found ${evt.idx} ${evt.name} ${evt.value}")
+        	nativeDev.sendEvent(name: evt.name, value: evt.value)
+        }
+    }
+
     def stateDevice = state.devices.find {key, item -> 
         item."${evt.idxName}" == evt.idx
     }
-    
+
     if (stateDevice) {
     	TRACE("[doUtilityEvent] ${evt.idxName} ${evt.name} ${evt.value}")
         stateDevice = stateDevice.toString().split("=")[0]
@@ -1591,6 +1603,8 @@ private def defineDomoticzInSmartThings(request) {
     def mainType = ""
     def deviceId = ""
     def dev = getChildDevice(dni)
+    def vid = null
+    def ocfdevicetype = null
 
  	if (request.dzStatus instanceof java.util.Map) {
     	 
@@ -1611,7 +1625,13 @@ private def defineDomoticzInSmartThings(request) {
         else {
             log.debug "[defineDomoticzInSmartThings] Device ${request.name} offline"
             devOffline(dev)
-        }    
+        } 
+        // set vid and ocfdevicetype
+        if (request.deviceType == "domoticzBlinds") {
+        	vid = "generic-shade"
+            ocfdevicetype = "oic.d.blind"
+        }
+        
     }
     
     if (dev) {      
@@ -1664,7 +1684,8 @@ private def defineDomoticzInSmartThings(request) {
         
         try {
             TRACE("[defineDomoticzInSmartThings] Creating child device ${request.idx}, ${request.deviceType}, ${request.name}, ${request.dzStatus}")
-            dev = addChildDevice("verbem", request.deviceType, dni, getHubID(), [name:request.name, label:request.name, completedSetup: true])
+            if (!vid) dev = addChildDevice("verbem", request.deviceType, dni, getHubID(), [name:request.name, label:request.name, completedSetup: true])
+            else dev = addChildDevice("verbem", request.deviceType, dni, getHubID(), [name:request.name, label:request.name, completedSetup: true, vid: vid, ocfdevicetype: ocfdevicetype ])
             
             state.devices[request.idx] = [
                 'dni'   : dni,
@@ -1700,6 +1721,8 @@ private def defineDomoticzInSmartThings(request) {
                 socketSend([request : "Notification", idx : request.idx, type : 0, action : "%24value"])
             }
             if (request.deviceType == "domoticzSelector") {
+                socketSend([request : "ClearNotification", idx : request.idx])
+
                 socketSend([request : "Notification", idx : request.idx, type : 16, action : "off"])
                 def decoded = request.dzStatus?.LevelNames.decodeBase64()
                 def decodedString = new String(decoded)
@@ -1839,7 +1862,8 @@ private def sendThermostatModes() {
         	selectorDev = getChildDevice("${app.id}:IDX:${idxMode}")
             if (selectorDev) {
             	tModes = selectorDev.currentValue("selector").tokenize("|")
-                thermoDev.sendEvent(name : "supportedThermostatModes", value : JsonOutput.toJson(tModes))               
+                thermoDev.sendEvent(name : "supportedThermostatModes", value : JsonOutput.toJson(tModes)) 
+                log.info JsonOutput.toJson(tModes)
             }
             else {
             	log.error "mode device not found ${app.id}:IDX:${idxMode}"
@@ -1983,6 +2007,17 @@ private def TRACE(message) {
 /*-----------------------------------------------------------------------------------------*/
 /*		REGULAR DOMOTICZ COMMAND HANDLERS FOR THE DEVICES
 /*-----------------------------------------------------------------------------------------*/
+def domoticz_selector_reset_notification(nid, levels) {
+    socketSend([request : "ClearNotification", idx : nid])
+    socketSend([request : "Notification", idx : nid, type : 16, action : "off"])
+    def levelNames = levels.tokenize('|')
+    def ix = 10
+    def maxIx = levelNames.size() * 10
+    for (ix=10; ix < maxIx; ix = ix+10) {
+        socketSend([request : "Notification", idx : nid, type : 7, action : "on", value: ix])
+    }
+}
+
 def domoticz_mood(nid, mood) {
     socketSend([request : mood, idx : nid])
 }
@@ -2236,6 +2271,7 @@ private def socketSend(passed) {
     }
 	TRACE("[socketSend] callbackhandler: [${hubCallback.callback}]")
     sendHubCommand(new physicalgraph.device.HubAction(method: "GET", path: hubPath, headers: [HOST: "${state.networkId}"], null, hubCallback))
+    pause 5
 }
 
 void aliveResponse(evt) {
@@ -2275,6 +2311,7 @@ void aliveChecker(evt) {
 	// -----------------------------------------------
 	// standard scheduling, not using ST schedule methods
 	// -----------------------------------------------
+    sendThermostatModes()
     runIn(10, refreshDevicesFromDomoticz)
     runIn(30, scheduledListSensorOptions)
 
@@ -2288,6 +2325,7 @@ void aliveChecker(evt) {
         }
     }
     state.scheduleCycle = cycles
+    
 
 }
 
@@ -2360,7 +2398,7 @@ void refreshDevicesFromDomoticz() {
 def eventDomoticz() {
 	
     aliveResponse()
-    log.trace params
+    //log.trace params
 	if (settings?.domoticzVirtualDevices == true) {
         if (params.message.contains("IDX ") && params.message.split().size() == 3) {
             def idx = params.message.split()[1]
