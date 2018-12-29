@@ -19,6 +19,8 @@ metadata {
 		capability "Actuator"
 		capability "Health Check"
 		capability "Power Meter"
+        capability "Power Consumption Report"
+        capability "Energy Meter"
         capability "Image Capture"
         
         attribute "powerTotal", "string"
@@ -31,7 +33,7 @@ metadata {
 	tiles(scale: 2) {       
         multiAttributeTile(name:"powerReport", type:"generic", width:6, height:4) {
             tileAttribute("device.power", key: "PRIMARY_CONTROL") {
-                attributeState "level", label:'${currentValue}', unit: "W" , defaultState: true, action: "take", backgroundColors:[                   
+                attributeState "level", label:'${currentValue} W', unit: "W" , defaultState: true, action: "take", backgroundColors:[                   
                     [value: 0, color: "#153591"],      	//dark blue
                     [value: 1000, color: "#1e9cbb"],    //light blue
                     [value: 2200, color: "#90d2a7"],	//greenish
@@ -41,12 +43,12 @@ metadata {
                     [value: 10000, color: "#bc2323"]	//red
                 ]
             }
-            tileAttribute("device.powerTotal", key: "SECONDARY_CONTROL") {
-                attributeState "powerTotal", label:'${currentValue}', unit: "kWh"
+            tileAttribute("device.energyMeter", key: "SECONDARY_CONTROL") {
+                attributeState "energyMeter", label:'${currentValue} kWh', unit: "kWh"
             }
         }
-        standardTile("powerMain", "device.power", inactiveLabel: false, decoration: "flat", width:2, height:2) {
-            state "level", label:'${currentValue} W'
+        standardTile("powerCR", "device.powerConsumption", inactiveLabel: false, decoration: "flat", width:4, height:2) {
+            state "powerConsumption", label:'${currentValue}'
         }	        
         standardTile("day", "day", inactiveLabel: false, decoration: "flat", width:2, height:2) {
             state "default", label:'24 hours', action:"takeDay"
@@ -61,7 +63,7 @@ metadata {
 	}
 
 	main "powerReport"
-    details(["powerReport", "day", "month", "year", "graph"])
+    details(["powerReport", "powerCR"])
 }
 
 // parse events into attributes
