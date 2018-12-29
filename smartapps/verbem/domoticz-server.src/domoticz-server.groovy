@@ -35,6 +35,7 @@
     V7.14	selector switch problem with Off
     V7.15	temperature for thermostat in composite creation, add callable function for selector device to reset notifications
     V7.16	Temp not send to domoticzSensor native, changed doUtilityEvent to check if native sensor exists 
+    V7.17	Option to assign DZ idx to Power/Gas reporting device, it will skip total computation of utility devices and take total values direct from a DZ metering device
  */
 
 import groovy.json.*
@@ -57,7 +58,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.16"}
+private def runningVersion() {"7.17"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -214,6 +215,7 @@ private def setupCompositeSensors() {
     def inputReportPower = [
         name        : "domoticzReportPower",
         type        : "bool",
+        submitOnChange : true,
         title       : "Create Utility Report device(s)",
         defaultValue: false
     ]
@@ -225,7 +227,7 @@ private def setupCompositeSensors() {
         section {	
       		state.listSensors.sort().each { key, item ->
                 def iMap = item as Map
-                if (item.type.matches("domoticzSensor|domoticzMotion|domoticzThermostat") && state.devices[iMap.idx]) {
+                if (item.type.matches("domoticzSensor|domoticzMotion|domoticzThermostat|domoticzPowerReport") && state.devices[iMap.idx]) {
                     if (item.type == "domoticzSensor") {
                         paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png"               
                         href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
@@ -238,11 +240,16 @@ private def setupCompositeSensors() {
                         paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Home/home1-icn@2x.png"               
                         href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
                     }
+                    if (item.type == "domoticzPowerReport" && domoticzReportPower) {
+                        paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Appliances/appliances17-icn@2x.png"               
+                        href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
+                    }
                 }
         	}
       	}
     }
-    
+
+	addReportDevices()    
     sendThermostatModes()
 }
 
@@ -332,6 +339,15 @@ private def setupCompositeSensorsAssignment(iMap) {
 
                 paragraph image:"http://cdn.device-icons.smartthings.com/Office/office11-icn@2x.png", "Custom Sensor#2"
                 input "idxCustom2[${iMap.idx}]", "enum", options: state.optionsCustom, required: false 
+            }
+    	}
+    	if (domoticzReportPower == true && iMap.type == "domoticzPowerReport") {
+            section {           
+                paragraph image:"http://cdn.device-icons.smartthings.com/Appliances/appliances17-icn@2x.png", "Power Meter"
+                input "idxPower[${iMap.idx}]", "enum", options: state.optionsPower, required: false
+
+                paragraph image:"http://cdn.device-icons.smartthings.com/Home/home29-icn@2x.png", "Gas Meter"
+                input "idxGas[${iMap.idx}]", "enum", options: state.optionsGas, required: false
             }
     	}
     }
@@ -774,7 +790,7 @@ private def assignSensorToDevice() {
             }
             else log.error "no configure on ${dni}"
         }
-        else log.error "no state.devices for ${idx}"
+        else log.info "no state.devices for ${idx}"
     }
 }
 
@@ -954,9 +970,14 @@ void callbackForUCount(evt) {
 	response.result.each { utility ->
 		// Power usage    
     	if (utility?.SubType == "kWh") {
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value:Float.parseFloat(utility.Usage.split(" ")[0]).round(1)])
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value: utility.Usage.split()[0].toDouble().round(1)])
             doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson(utility.Data)])          
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: Float.parseFloat(utility.Data.split(" ")[0]).round(1)])          
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: utility.Data.split()[0].toDouble().round(1)])          
+        }
+    	if (utility?.SubType == "Energy") {
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value:utility.Usage.split()[0].toDouble().round(0)])
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson(utility.Data)])          
+            if (utility?.CounterToday) doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: utility.CounterToday.split()[0].toDouble().round(0)])          
         }
         // Motion        
     	if (utility?.SwitchTypeVal == 8) {
@@ -1221,7 +1242,7 @@ private def callbackForDevices(statusrsp) {
                     	break
                     case [0, 7]:		// 	Lamps OnOff, Dimmers and RGB
                         SubType = device?.SubType
-                        if (domoticzTypes.contains('On/Off/Dimmers/RGB') && SubType != "kWh") defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzOnOff", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
+                        if (domoticzTypes.contains('On/Off/Dimmers/RGB') && SubType.matches("kWh|Energy") == false) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzOnOff", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
                         break
                     case [2, 11]:				//	Contact 
                         if (domoticzTypes.contains('Contact Sensors')) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzContact", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
@@ -1280,6 +1301,11 @@ def callbackForEveryThing(evt) {
     def stateDevice
     def ID
     def IDX
+    def statePower = state?.devices["10000"]
+    def stateGas = state?.devices["10001"]
+    def devReportPower
+    def devReportGas
+
     
     response.result.each {
 		//TEMP		    	        
@@ -1336,7 +1362,22 @@ def callbackForEveryThing(evt) {
         if (it?.Barometer) {
         	state.optionsPressure[it.idx] = "${it.idx} : ${it.Name}"
             if (it.Notifications == "false") socketSend([request : "SensorPressureNotification", idx : it.idx])
-        }        
+        } 
+        //USAGE ENERGY (P1 meters)
+        if (it?.SubType == "Energy") {
+        	state.optionsPower[it.idx] = "${it.idx} : ${it.Name}"
+        	if (it.Notifications == "false") socketSend([request : "SensorKWHNotification", idx : it.idx])	
+    		if (statePower?.idxPower == it.idx) {
+                devReportPower = getChildDevice(state.devReportPower)
+                if (devReportPower) {
+                	powerUnit = it.Data.split()[1]
+                	powerUsage = it.Usage.split()[1]
+                    devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
+                    devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
+                }            	
+            }
+        }
         //USAGE POWER
         if (it?.SubType == "kWh") {	
         	state.optionsPower[it.idx] = "${it.idx} : ${it.Name}"             
@@ -1345,6 +1386,17 @@ def callbackForEveryThing(evt) {
             watt = watt + Float.parseFloat(it.Usage.split()[0])
 			powerUnit = it.Data.split()[1]
             powerUsage = it.Usage.split()[1]
+            
+    		if (statePower?.idxPower == it.idx) {
+                devReportPower = getChildDevice(state.devReportPower)
+                if (devReportPower) {
+                	def k = it.Data.split()[0].toDouble().round(0)
+                    def w = it.Usage.split()[0].toDouble().round(0)
+                    devReportPower.sendEvent(name:"energyMeter", value: "${k}", unit:powerUnit)
+                    devReportPower.sendEvent(name:"power", value: w, unit:powerUsage)
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
+                }            	
+            }
 			//add idxPower to real device by matching the ID
 			ID = it?.ID
 			stateDevice = state.devices.find {key, item -> 
@@ -1373,24 +1425,38 @@ def callbackForEveryThing(evt) {
             gasTotal = gasTotal + Float.parseFloat(it.Counter)
             gasUsage = gasUsage + Float.parseFloat(it.CounterToday.split()[0])
             gasUnit = it.CounterToday.split()[1]
+    		if (stateGas?.idxGas == it.idx) {
+                devReportGas = getChildDevice(state.devReportGas)
+                if (devReportGas) {
+                    devReportGas.sendEvent(name:"energyMeter", value: "${it.Counter.round(3)}", unit:gasUnit)
+                    devReportGas.sendEvent(name:"power", value: it.CounterToday.split()[0].round(3), unit:gasUnit)
+                    devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
+                }            	
+            }
 		}
 }
     
-	// pass to Devices that report Usage totals   
-    if (kwh > 0 && state.devReportPower != null) {
-    	def devReportPower = getChildDevice(state.devReportPower)
-        if (devReportPower) {
-            devReportPower.sendEvent(name:"powerTotal", value: "${kwh.round(3)} ${powerUnit}", unit:powerUnit)
-            devReportPower.sendEvent(name:"power", value: watt.round(), unit:powerUsage)
+	// pass to Devices that report Usage totals but only if report device does not contain idxPower or idxGas key
+    if (statePower?.containsKey("idxPower") == false) { 
+        if (kwh > 0 && state.devReportPower != null) {
+            devReportPower = getChildDevice(state.devReportPower)
+            if (devReportPower) {
+                devReportPower.sendEvent(name:"energyMeter", value: "${kwh.round(0)}", unit:powerUnit)
+                devReportPower.sendEvent(name:"power", value: watt.round(0), unit:powerUsage)
+                devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("no data"))
+            }
         }
-   	}
-    if (gasUsage > 0 && state.devReportGas != null) {
-    	def devReportGas = getChildDevice(state.devReportGas)
-        if (devReportGas) {
-            devReportGas.sendEvent(name:"powerTotal", value: "${gasTotal.round(3)} ${gasUnit}", unit:gasUnit)
-            devReportGas.sendEvent(name:"power", value: gasUsage.round(3), unit:gasUnit)
+    }
+    if (stateGas?.containsKey("idxGas") == false) { 
+        if (gasUsage > 0 && state.devReportGas != null) {
+            devReportGas = getChildDevice(state.devReportGas)
+            if (devReportGas) {
+                devReportGas.sendEvent(name:"energyMeter", value: "${gasTotal.round(3)}", unit:gasUnit)
+                devReportGas.sendEvent(name:"power", value: gasUsage.round(3), unit:gasUnit)
+                devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("no data"))
+            }
         }
-   	}
+  	}
 }
 
 /*-----------------------------------------------------------------------------------------*/
@@ -1478,6 +1544,7 @@ def handleList(evt) {
 	if (state.devices) {
 		def stateIdxList = state.devices.collect {it.key}.sort()
         def stateToDeleteList = stateIdxList.minus(nextIdxList)
+        stateToDeleteList = stateToDeleteList.minus(["10000", "10001"])
 
         dzDeletedList.each { idx ->
             try {
@@ -1487,11 +1554,18 @@ def handleList(evt) {
                 log.error "[handleList] error deleting child ${app.id + ":IDX:" + idx}"
             }
         }
-
+              
     	TRACE("[handleList] Delete from State devices ${stateToDeleteList}")  
         stateToDeleteList.each {state.devices.remove(it)}
+		stateToDeleteList = []
+        
+        def childIdxList = getChildDevices().collect { if (it.deviceNetworkId.tokenize(":")[2].toInteger() < 10000) it.deviceNetworkId.tokenize(":")[2]}.findAll{it != null}.sort()
+        //no child exists for dni in state...remove
+        state.devices.each { key, item ->
+        	if (item.containsKey("dni") && !getChildDevice(item.dni)) stateToDeleteList.add(key)
+        }
 
-        def childIdxList = getChildDevices().collect { if (it.deviceNetworkId.tokenize(":")[2] != "10000") it.deviceNetworkId.tokenize(":")[2]}.findAll{it != null}.sort()
+        stateToDeleteList.each {state.devices.remove(it)}
 	}
     
 	state.listInprogress = true
@@ -1863,7 +1937,6 @@ private def sendThermostatModes() {
             if (selectorDev) {
             	tModes = selectorDev.currentValue("selector").tokenize("|")
                 thermoDev.sendEvent(name : "supportedThermostatModes", value : JsonOutput.toJson(tModes)) 
-                log.info JsonOutput.toJson(tModes)
             }
             else {
             	log.error "mode device not found ${app.id}:IDX:${idxMode}"
@@ -1879,30 +1952,63 @@ private def addReportDevices() {
 	def passedName
     def newdni
     def dev
-
+  
 	if (settings.domoticzReportPower) {
-		if (state?.optionsPower) {
-            passedName = "Power Reporting Device"
-            newdni = app.id + ":Power Reporting Device:" + 10000
-            dev = getChildDevice(newdni)
 
-            if (!dev) {      
+            passedName = "Power Reporting Device"
+            newdni = app.id + ":Power Reporting Device:" + "10000"
+            dev = getChildDevice(newdni)
+            
+            if (!dev) {
                 dev = addChildDevice("verbem", "domoticzPowerReport", newdni, getHubID(), [name:passedName, label:passedName, completedSetup:true])
                 pause 5
             }
+            if (!state.listSensors["10000"]) state.listSensors["10000"] = [name: passedName, idx: "10000", type: "domoticzPowerReport"]
             state.devReportPower = newdni
-        }
-
-		if (state?.optionsGas) {
-            passedName = "Gas Reporting Device"
-            newdni = app.id + ":Gas Reporting Device:" + 10000
+            
+            state.devices["10000"] = [
+                'dni'   : newdni,
+                'idx' : "10000",
+                'type'  : "Sensor",
+                'deviceType' : "domoticzPowerReport",
+                'subType' : "Energy",
+				'switchTypeVal' : "0"
+            	]
+            pause 3    
+			passedName = "Gas Reporting Device"
+            newdni = app.id + ":Gas Reporting Device:" + "10001"
             dev = getChildDevice(newdni)
-
+            
             if (!dev) {      
                 dev = addChildDevice("verbem", "domoticzPowerReport", newdni, getHubID(), [name:passedName, label:passedName, completedSetup:true])
                 pause 5
             } 
+            if (!state.listSensors["10001"]) state.listSensors["10001"] = [name: passedName, idx: "10001", type: "domoticzPowerReport"]
             state.devReportGas = newdni
+            state.devices["10001"] = [
+                'dni'   : newdni,
+                'idx' : "10001",
+                'type'  : "Sensor",
+                'deviceType' : "domoticzPowerReport",
+                'subType' : "Gas",
+                'switchTypeVal' : "0"
+            	]
+			pause 3
+    }
+    else {
+        if (state?.devReportPower) {
+        	dev = getChildDevice(state.devReportPower)
+        	if (dev) {
+            	deleteChildDevice(state.devReportPower)
+            	state.remove("devReportPower")
+            }
+        }
+		if (state?.devReportGas) {
+        	dev = getChildDevice(state.devReportGas)
+            if (dev) {
+        		deleteChildDevice(state.devReportGas)
+            	state.remove("devReportGas")
+            }
         }
     }
 }
@@ -1944,7 +2050,7 @@ def updateDeviceList() {
     	findrspGroup = temprspGroups.find {it == child.deviceNetworkId.split(":")[2] }
         Idx = child.deviceNetworkId.split(":")[2]
 
-        if (Idx != "10000") {   // special devices that should not be deleted automatically have idx = 10000
+        if (Idx.matches("10000|10001") == false ) {   // special devices that should not be deleted automatically have idx > 10000
             if (!findrspDevice && !findrspGroup) {
                 TRACE("[updateDeviceList] NOT FOUND ${child.name} delete childDevice")
                 try {
@@ -2066,9 +2172,7 @@ def domoticz_stop(nid) {
 
 def domoticz_setlevel(nid, xLevel) {
     if (xLevel.toInteger() == 0) {
-    	log.info "setlevel " + xLevel 
         socketSend([request : "setlevel", idx : nid, level : xLevel])
-    	//socketSend([request : "off", idx : nid])
     }    
     else {
         if (state.devices[nid].subType == "RFY") {
