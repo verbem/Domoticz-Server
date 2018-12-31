@@ -36,6 +36,7 @@
     V7.15	temperature for thermostat in composite creation, add callable function for selector device to reset notifications
     V7.16	Temp not send to domoticzSensor native, changed doUtilityEvent to check if native sensor exists 
     V7.17	Option to assign DZ idx to Power/Gas reporting device, it will skip total computation of utility devices and take total values direct from a DZ metering device
+    v7.18	Changed setup of composite devices page so you can select utility report even no other sensors exists
  */
 
 import groovy.json.*
@@ -58,7 +59,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.17"}
+private def runningVersion() {"7.18"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -175,12 +176,10 @@ private def setupMenu() {
         section {
             href "setupDomoticz", title:"Configure Domoticz Server", description:"Tap to open"
             href "setupDeviceRequest", title:"Add all selected Devicetypes or those in selected Rooms", description:"Tap to open"
-            if (state.devices.size() > 0) {
+        	if (state.devices.size() > 0) {
                 href "setupListDevices", title:"List Installed Devices", description:"Tap to open"
             }
-            if (state?.listSensors?.size() > 0) {
-            	href "setupCompositeSensors", title:"Create Composite Devices", description:"Tap to open"	
-            }
+            href "setupCompositeSensors", title:"Create Composite Devices", description:"Tap to open"	
             href "setupRefreshToken", title:"Revoke/Recreate Access Token", description:"Tap to open"
             href "setupSmartThingsToDomoticz", title:"Define SmartThing Devices in Domoticz", description:"Tap to open"
         }
@@ -224,30 +223,33 @@ private def setupCompositeSensors() {
 		section {
         	input inputReportPower
         }
-        section {	
-      		state.listSensors.sort().each { key, item ->
-                def iMap = item as Map
-                if (item.type.matches("domoticzSensor|domoticzMotion|domoticzThermostat|domoticzPowerReport") && state.devices[iMap.idx]) {
-                    if (item.type == "domoticzSensor") {
-                        paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png"               
-                        href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                    }
-                    if (item.type == "domoticzMotion") {
-                        paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Health & Wellness/health12-icn@2x.png"               
-                        href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                    }
-                    if (item.type == "domoticzThermostat") {
-                        paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Home/home1-icn@2x.png"               
-                        href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                    }
-                    if (item.type == "domoticzPowerReport" && domoticzReportPower) {
-                        paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Appliances/appliances17-icn@2x.png"               
-                        href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
+        if (state?.listSensors?.size() > 0) {
+            section {	
+                state.listSensors.sort().each { key, item ->
+                    def iMap = item as Map
+                    if (item.type.matches("domoticzSensor|domoticzMotion|domoticzThermostat|domoticzPowerReport") && state.devices[iMap.idx]) {
+                        if (item.type == "domoticzSensor") {
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png"               
+                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
+                        }
+                        if (item.type == "domoticzMotion") {
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Health & Wellness/health12-icn@2x.png"               
+                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
+                        }
+                        if (item.type == "domoticzThermostat") {
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Home/home1-icn@2x.png"               
+                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
+                        }
+                        if (item.type == "domoticzPowerReport" && domoticzReportPower) {
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Appliances/appliances17-icn@2x.png"               
+                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
+                        }
                     }
                 }
         	}
       	}
-    }
+
+	}
 
 	addReportDevices()    
     sendThermostatModes()
