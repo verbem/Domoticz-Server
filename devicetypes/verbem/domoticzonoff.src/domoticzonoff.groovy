@@ -20,13 +20,14 @@
  *  2017-01-25 3.09 Put in check for switch name in generateevent
  *	2017-01-18 3.08 get always an lowercase value for switch on/off in generateevent
  *	2017-03-28 4.00	add Hue API effect/alert buttons
+ *	2018-12-25 4.10 make connect compatible (work left on the child devices)
  */
  
 import Calendar.*
 import groovy.time.*
 
 metadata {
-    definition (name:"domoticzOnOff", namespace:"verbem", author:"Martin Verbeek") {
+    definition (name:"domoticzOnOff", namespace:"verbem", author:"Martin Verbeek", mnmn:"SmartThings", vid: "generic-rgbw-color-bulb") {
     	capability "Configuration"
         capability "Actuator"
         capability "Sensor"
@@ -35,18 +36,19 @@ metadata {
 		capability "Switch"
         capability "Switch Level"
         capability "Refresh"
-        capability "Polling"
 		capability "Health Check"
         capability "Power Meter"
+        capability "Energy Meter"
+        capability "Power Consumption Report"
 
-		attribute "powerToday", "String"
+		//attribute "powerToday", "String"
 
         // custom commands
-        command "hourLog"
-        command	"day"
-        command "week"
-        command "month"
-        command "year"
+        //command "hourLog"
+        //command	"day"
+        //command "week"
+        //command "month"
+        //command "year"
         
         //attribute "hour", "string"
         //attribute "graph", "string"
@@ -76,9 +78,8 @@ metadata {
 				attributeState "Error", label:'Install Error', backgroundColor: "#bc2323"
                 
             }
-            tileAttribute ("device.powerToday", key: "SECONDARY_CONTROL") {
-                attributeState "powerToday", label:'${currentValue}', icon: "st.Appliances.appliances17", defaultState: true
-                attributeState "noPower", label:''
+            tileAttribute ("device.power", key: "SECONDARY_CONTROL") {
+                attributeState "power", label:'${currentValue}', icon: "st.Appliances.appliances17"
             }            
             tileAttribute("device.level", key: "SLIDER_CONTROL") {
             	attributeState "level", label:'${currentValue}', action:"setLevel" 
@@ -108,22 +109,17 @@ metadata {
 		childDeviceTile("sensorSignalStrength", "Signal Strength", decoration: "flat", width: 1, height: 1, childTileName: "sensorSignalStrength")   
 		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")   
 
-		childDeviceTile("graph", "Graph", decoration: "flat", width: 6, height: 4, childTileName: "graph")   
-		childDeviceTile("day", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "day")   
-		childDeviceTile("week", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "week")   
-		childDeviceTile("month", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "month")   
-		childDeviceTile("year", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "year")   
+		//childDeviceTile("graph", "Graph", decoration: "flat", width: 6, height: 4, childTileName: "graph")   
+		//childDeviceTile("day", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "day")   
+		//childDeviceTile("week", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "week")   
+		//childDeviceTile("month", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "month")   
+		//childDeviceTile("year", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "year")   
 
         main(["richDomoticzOnOff"])
         details(["richDomoticzOnOff", "Group Off", "Group Mood 1", "Group Mood 2", "Group Mood 3", "Group Mood 4", "Group Mood 5",
         	"Effect None", "Effect Colorloop", "Alert None", "Alert Select", "Alert Lselect",
         	"sensorSignalStrength", "sensorBattery", "day", "week", "month", "year", "graph", "refresh"])
     }
-}
-
-// switch.poll() command handler
-def poll() {
-	refresh()   
 }
 
 // switch.refresh() command handler
@@ -173,15 +169,20 @@ def setColorTemperature(ct) {
 }
 
 // Custom setcolor() command handler hue from ST is percentage of 360 which is max HUE
-def setColor(color) {
-	//if (parent.name.matches("Domoticz Server|Hue Sensor (Connect)") == false) return
-    
+def setColor(color) {  
 	log.trace "[setColor] " + color
+    
+    if (color.switch == "off") {
+    	off()
+    	return
+    }
+    
 	def hexCode = null
 
     if (!color?.hex) {
         //hue:83, saturation:100, level:80
         log.trace color
+        if (!color.level ) color.level = 80
         TRACE("SetColor HUE " + (color.hue*3.6) + " Sat " + Math.round(color.saturation) + " Level " + color.level)
         if (parent) {
             if (color.hue == 5 && color.saturation == 4) {
@@ -220,6 +221,8 @@ def setColor(color) {
             if (parent.name == "Hue Sensor (Connect)") parent.groupCommand(["command" : "hue", "dni": device.deviceNetworkId, "level": state.setLevel, "hue": color.hue, "sat": color.saturation])                        
         }
     }
+    sendEvent(name: "color", value: [hue: color.hue.toInteger(), saturation: color.saturation.toInteger()])
+    sendEvent(name: "switch", value: "on")
 
 }
 
@@ -713,7 +716,7 @@ def initialize() {
 
 	if (parent) {
         sendEvent(name: "DeviceWatch-Enroll", value: groovy.json.JsonOutput.toJson([protocol: "LAN", scheme:"untracked"]), displayed: false)
-        sendEvent(name: "powerToday", value: "noPower")
+        //sendEvent(name: "powerToday", value: "noPower")
     }
     else {
     	log.error "You cannot use this DTH without the related SmartAPP Domoticz Server, the device needs to be a child of this App"

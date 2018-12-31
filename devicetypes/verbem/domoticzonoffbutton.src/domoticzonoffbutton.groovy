@@ -14,10 +14,11 @@
  *
  */
 metadata {
-	definition (name: "domoticzOnOffButton", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzOnOffButton", namespace: "verbem", author: "Martin Verbeek", vid: "generic-button") {
 		capability "Button"
 		capability "Actuator"
 		capability "Sensor"
+        capability "Health Check"
         
         command "buttonPress"
         attribute "labelButton", "string"

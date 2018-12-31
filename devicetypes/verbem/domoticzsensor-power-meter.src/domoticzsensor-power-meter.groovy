@@ -15,7 +15,9 @@
  */
 metadata {
 	definition (name: "domoticzSensor Power Meter", namespace: "verbem", author: "Martin Verbeek") {
-		capability "Sensor"       
+		capability "Sensor"
+        capability "Power Meter"
+        capability "Health Check"
     }
 
 	tiles

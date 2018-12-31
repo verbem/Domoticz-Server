@@ -14,8 +14,9 @@
  *
  */
 metadata {
-	definition (name: "domoticzSensor Relative Humidity Measurement", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSensor Relative Humidity Measurement", namespace: "verbem", author: "Martin Verbeek", vid: "generic-humidity") {
 		capability "Relative Humidity Measurement"
+        capability "Health Check"
 		capability "Sensor"
 	}
 
