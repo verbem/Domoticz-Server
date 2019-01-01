@@ -14,7 +14,7 @@
  *
  */
 metadata {
-	definition (name: "domoticzSmokeDetector", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSmokeDetector", namespace: "verbem", author: "Martin Verbeek", vid : "generic-smoke") {
 		capability "Smoke Detector"
 		capability "Temperature Measurement"
 		capability "Actuator"

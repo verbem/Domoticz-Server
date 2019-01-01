@@ -9,7 +9,7 @@
  
  */
 metadata {
-	definition (name: "domoticzThermostat", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzThermostat", namespace: "verbem", author: "Martin Verbeek", vid:"generic-thermostat") {
     	capability "Configuration"
 		capability "Actuator"
 		capability "Thermostat"
@@ -80,14 +80,16 @@ multiAttributeTile(name:"thermostatFull", type:"thermostat", width:6, height:4) 
 		childDeviceTile("sensorSound", "Sound Sensor", decoration: "flat", width: 2, height: 2, childTileName: "sensorSound")   
 		childDeviceTile("sensorTemperature", "Temperature Measurement", decoration: "flat", width: 2, height: 2, childTileName: "sensorTemperature")   
 		childDeviceTile("sensorSignalStrength", "Signal Strength", decoration: "flat", width: 2, height: 2, childTileName: "sensorSignalStrength")   
-		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")   
-
+		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")  
+        
+		childDeviceTiles("stateButton", decoration: "flat", width: 2, height: 2)
+        
 		standardTile("refresh", "device.refresh", decoration: "flat", inactiveLabel: false,  width: 2, height: 2) {
 			state "default", action:"refresh.refresh", icon:"st.secondary.refresh"
 		}
         
 		main "thermostatFull"
-		details(["thermostatFull", "sensorBattery", "sensorSignalStrength", "sensorHumidity", "sensorBarometricPressure", "sensorGas", "sensorPower", "sensorIlluminance", "sensorAirQuality", "sensorSound", "sensorTemperature", "refresh"])
+		details(["thermostatFull", "sensorBattery", "sensorSignalStrength", "sensorHumidity", "sensorBarometricPressure", "sensorGas", "sensorPower", "sensorIlluminance", "sensorAirQuality", "sensorSound", "sensorTemperature", "stateButton", "refresh"])
 	
 
 	//preferences {
@@ -95,7 +97,7 @@ multiAttributeTile(name:"thermostatFull", type:"thermostat", width:6, height:4) 
 	//}
 }
 void setThermostatMode(setMode) {
-	sendEvent(name: "thermostatMode", value: setMode)
+	log.info "setThermostatMode entered with ${setMode}"
     def thermostatOperatingState
     if (setMode != "emergency heat") {
     	if (setMode.toUpperCase().contains("HEAT")) setMode = "heat"
@@ -104,8 +106,8 @@ void setThermostatMode(setMode) {
     	if (setMode.toUpperCase().contains("AUTO")) setMode = "auto"
     	if (setMode.toUpperCase().contains("ECO")) setMode = "eco"
     }
-    
-    log.info "Mode ${setMode} has been set"
+	sendEvent(name: "thermostatMode", value: setMode)    
+    log.info "setThermostatMode ${setMode} has been set"
    
     switch (setMode) {
     case "emergency heat":
@@ -304,7 +306,7 @@ def parse(Map message) {
     def capability
     def evt = createEvent(message)
     if (message.name.matches("humidity|power|gas|temperature|battery|rssi")) {
-
+		log.info message.name
     	switch (message.name) {
         	case "airQuality":
             capability = "Air Quality Sensor"
@@ -338,10 +340,14 @@ def parse(Map message) {
             break
         }
         if (capability) {
-            getChildDevices().each { child ->
-                if (child.deviceNetworkId.split("-")[1] == capability) { 
-                	log.info "Component Capability : ${capability} Message : ${message}"
-                	child.sendEvent(message)
+        	configure(capability)
+            
+        	if (getChildDevices()) {
+                getChildDevices().each { child ->
+                    if (child.deviceNetworkId.split("-")[1] == capability) { 
+                        log.info "Component Capability : ${capability} Message : ${message}"
+                        child.sendEvent(message)
+                    }
                 }
             }
         }

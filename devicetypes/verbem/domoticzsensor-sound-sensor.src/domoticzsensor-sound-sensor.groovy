@@ -14,10 +14,11 @@
  *
  */
 metadata {
-	definition (name: "domoticzSensor Sound Sensor", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSensor Sound Sensor", namespace: "verbem", author: "Martin Verbeek", vid:"generic-sound") {
 		capability "Sound Pressure Level"
 		capability "Sensor"
 		capability "Sound Sensor"
+        capability "Health Check"
 	}
 
 	tiles

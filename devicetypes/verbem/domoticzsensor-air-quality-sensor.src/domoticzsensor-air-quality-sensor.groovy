@@ -17,6 +17,7 @@ metadata {
 	definition (name: "domoticzSensor Air Quality Sensor", namespace: "verbem", author: "Martin Verbeek") {
 		capability "Air Quality Sensor"
 		capability "Sensor"
+        capability "Health Check"
 	}
 
 	tiles

@@ -7,9 +7,10 @@
  *
  */
 metadata {
-	definition (name: "domoticzSensor Battery", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSensor Battery", namespace: "verbem", author: "Martin Verbeek", vid:"generic-battery") {
 		capability "Battery"
 		capability "Sensor"
+        capability "Health Check"
 	}
 
 	tiles

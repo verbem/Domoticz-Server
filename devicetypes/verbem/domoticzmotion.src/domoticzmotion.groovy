@@ -1,33 +1,24 @@
 /**
  *  domoticzMotion
  *
- *  Copyright 2016 Martin Verbeek
+ *  Copyright 2018 Martin Verbeek
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+	V4.0 2018-06-02 Fix Power capability
  *
  */
 metadata {
-	definition (name: "domoticzMotion", namespace: "verbem", author: "SmartThings") {
+	definition (name: "domoticzMotion", namespace: "verbem", author: "SmartThings", vid : "generic-motion-7") {
     	capability "Configuration"
 		capability "Motion Sensor"
 		capability "Sensor"
 		capability "Actuator"
 		capability "Refresh"
 		capability "Health Check"
-        capability "Power"
-        
-        attribute "powerToday", "string"
+       
         }
 
 	tiles(scale: 2) {
-		multiAttributeTile(name:"motion", type: "generic", width: 6, height: 4){
+		multiAttributeTile(name:"sensorMotion", type: "generic", width: 6, height: 4) {
 			tileAttribute ("device.motion", key: "PRIMARY_CONTROL") {
 				attributeState "active", label:'motion', icon:"st.motion.motion.active", backgroundColor:"#00a0dc"
 				attributeState "on", label:'motion', icon:"st.motion.motion.active", backgroundColor:"#00a0dc"
@@ -39,9 +30,6 @@ metadata {
 				attributeState "OFF", label:'no motion', icon:"st.motion.motion.inactive", backgroundColor:"#ffffff"
 				attributeState "Error", label:"Install Error", backgroundColor: "#bc2323"
 			}
-            tileAttribute("device.powerToday", key: "SECONDARY_CONTROL") {
-        		attributeState "powerToday",label:'${currentValue}', icon:"st.switches.switch.on", defaultState: true
-            }
 		}
 
 		standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
@@ -58,23 +46,21 @@ metadata {
 		childDeviceTile("sensorSignalStrength", "Signal Strength", decoration: "flat", width: 2, height: 2, childTileName: "sensorSignalStrength")   
 		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")   
 
-		main "motion"
-		details(["motion", "sensorTemperature", "sensorBattery", "sensorIlluminance", "sensorSignalStrength", "refresh"])
+		main "sensorMotion"
+		details(["sensorMotion", "sensorTemperature", "sensorBattery", "sensorIlluminance", "sensorSignalStrength", "refresh"])
+
 	}
 }
 
 def refresh() {
-	log.debug "Executing 'refresh'"
 
     if (parent) {
         parent.domoticz_poll(getIDXAddress())
-        if (device.currentValue("powerToday") == null) sendEvent(name:"powerToday", value:"Usage not reported")
     }
 }
 
 // gets the IDX address of the device
 private getIDXAddress() {
-	
     def idx = getDataValue("idx")
         
     if (!idx) {
@@ -95,7 +81,7 @@ def installed() {
 }
 
 def parse(Map message) {
-	
+    
     def capability
     def evt = createEvent(message)
     if (message.name.matches("illuminance|soundPressureLevel|temperature|battery|rssi")) {
@@ -145,22 +131,17 @@ def parse(Map message) {
 }
 
 def configure(type) {  
-    def children = getChildDevices()
-    def childExists = false
-
-    children.each { child ->
-        if (!childExists) childExists = child.deviceNetworkId.contains(type.toString())   	
-    }
     
-    if (!childExists) {
-        log.info "Adding capability ${type}"
-        addChildDevice("domoticzSensor ${type}", 
-                       "${device.displayName}-${type}", 
-                       null, 
-                       [completedSetup: true, label: "${device.displayName}-${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
+    def children = getChildDevices().findAll {it.deviceNetworkId.contains(type.toString()) == true}
+    def DNI
+   
+    if (!children) {
+    	DNI = device.deviceNetworkId.split(":")[2]
+        log.info "Adding capability ${type} |${DNI}|"
+        addChildDevice("domoticzSensor ${type}", "IDX:${DNI}-${type}", null, [completedSetup: true, label: "${device.displayName}-${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
 	}                   
-
 }
+
 def updated() {
 	initialize()
 }
@@ -169,7 +150,6 @@ def initialize() {
 
 	if (parent) {
         sendEvent(name: "DeviceWatch-Enroll", value: groovy.json.JsonOutput.toJson([protocol: "LAN", scheme:"untracked"]), displayed: false)
-        if (device.currentValue("powerToday") == null) sendEvent(name:"powerToday", value:"Power not reported")
     }
     else {
     	log.error "You cannot use this DTH without the related SmartAPP Domoticz Server, the device needs to be a child of this App"

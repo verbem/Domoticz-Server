@@ -322,7 +322,7 @@ def configure(type) {
     def children = getChildDevices()
     def childExists = false
     def devType = "domoticzOnOff"
-    def subType = type
+    def subType = type.toString()
 
     children.each { child ->
         if (!childExists) childExists = child.deviceNetworkId.contains(type.toString())   	
@@ -335,10 +335,13 @@ def configure(type) {
 	if (type.toString().matches("Signal Strength|Battery")) devType = "domoticzSensor "
     if (!childExists) {
         log.info "Adding capability ${subType}"
-        addChildDevice("${devType}${type}", 
-                       "${device.displayName}=${subType}", 
-                       null, 
-                       [completedSetup: true, label: "${device.displayName}=${subType}", isComponent: true, componentName: "${subType}", componentLabel: "${subType}"])
+        try {
+            addChildDevice("${devType}${type}", 
+                           "${device.displayName}=${subType}", 
+                           null, 
+                           [completedSetup: true, label: "${device.displayName}=${subType}", isComponent: true, componentName: "${subType}", componentLabel: "${subType}"])
+            }
+        catch(e) {log.info "Error adding child ${devType}${type} ${device.displayName}=${subType} error ${e}"}
 	}                   
 }
 

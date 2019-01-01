@@ -14,8 +14,9 @@
  *
  */
 metadata {
-	definition (name: "domoticzSensor Illuminance Measurement", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSensor Illuminance Measurement", namespace: "verbem", author: "Martin Verbeek", vid: "generic-illuminance") {
 		capability "Illuminance Measurement"
+        capability "Health Check"
 		capability "Sensor"
 	}
 

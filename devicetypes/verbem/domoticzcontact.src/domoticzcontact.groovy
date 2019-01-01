@@ -14,7 +14,7 @@
  *
  */
 metadata {
-	definition (name: "domoticzContact", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzContact", namespace: "verbem", author: "Martin Verbeek", vid : "generic-contact") {
 		capability "Actuator"
 		capability "Contact Sensor"
 		capability "Refresh"
@@ -22,8 +22,6 @@ metadata {
 		capability "Temperature Measurement"
         capability "Signal Strength"
 		capability "Health Check"
-
-        attribute "NotificationsDefinedInDomoticz", "enum", ["true","false"]
         }
 
 preferences {
@@ -73,12 +71,8 @@ tiles(scale: 2) {
             state "false", label:' Notifications ${currentValue}', backGroundColor:"#e86d13"
         }
 
-		standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
-			state "default", action:"refresh.refresh", icon:"st.secondary.refresh"
-		}
-
 		main (["contact", "temperature"])
-		details(["contact","temperature","battery", "DZ", "rssi", "refresh"])
+		details(["contact","temperature","battery", "rssi", "refresh"])
 	}
 
 }

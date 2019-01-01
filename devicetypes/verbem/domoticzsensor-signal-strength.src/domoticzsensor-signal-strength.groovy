@@ -16,6 +16,7 @@
 metadata {
 	definition (name: "domoticzSensor Signal Strength", namespace: "verbem", author: "Martin Verbeek") {
 		capability "Signal Strength"
+        capability "Health Check"
 		capability "Sensor"
 	}
 

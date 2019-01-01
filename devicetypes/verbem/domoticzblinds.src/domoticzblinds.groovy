@@ -1,24 +1,13 @@
+
 /**
  *  domoticzBlinds
  *
- *  Copyright 2016 Martin Verbeek
+ *  Copyright 2018 Martin Verbeek
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
- *
- *  2.1 2016-11-21 Rework of setColor 
- *	2.2 2016-12-01 added calibration of the closing time, now you can use setlevel or ask alexa to dim to a percentage
- *	3.0 2016-12-24 cleanup of DTH statuses
- *  3.1 2017-05-10 Adding end of day scheduling for blinds as an offset to sunset, these are set in the Smart Screens app. 
- *  3.2 2017-07-12 Adding HC and parent check
  *	4.0 2018-02-12 Add windowShade capability, fix eodDone
  *	4.1	2018-04-05 Introduce configure for all non standard attributes and commands
+ *	4.2	2018-06-02 Moved EOD processing to SM
+ *	4.3	2018-06-21 Removed calibrate, moved it to timed session capability
  */
 import groovy.time.TimeCategory 
 import groovy.time.TimeDuration
@@ -27,19 +16,18 @@ preferences {
     input(name:"stopSupported", type:"bool", title: "Stop command supported?", description:"Does your blind use the STOP command to halt the blind. NOT to be confused with the Somfy Stop/My command!", defaultValue:false)
 }   
 metadata {
-	definition (name: "domoticzBlinds", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzBlinds", namespace: "verbem", author: "Martin Verbeek", vid: "generic-shade", ocfdevicetype: "oic.d.blind") {
     
         capability "Actuator"
         capability "Switch"
         capability "Sensor"
         capability "Switch Level"
         capability "Refresh"
-        capability "Polling"
         capability "Signal Strength"
 		capability "Health Check"
         capability "Window Shade"
         capability "Configuration"
-        capability "Sleep Sensor"
+        capability "Timed Session"
 
     }
 
@@ -73,9 +61,12 @@ metadata {
                 action:"close"
         }
 
-		standardTile("Cal", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
-            state "default", label:'Calibrate', icon:"st.doors.garage.garage-closing",
-                action:"configure"
+		standardTile("Cal", "device.sessionStatus", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
+            state "canceled", label:'Start Calibrate', icon:"st.doors.garage.garage-closing",action:"start"
+            state "stopped",  label:'Start Calibrate', icon:"st.doors.garage.garage-closing",action:"start"
+            state "running",  label:'Stop Calibrate', icon:"st.doors.garage.garage-closed",action:"stop"
+            state "paused", label:'Start Calibrate', icon:"st.doors.garage.garage-closing",action:"start"
+            state "default", label:'Start Calibrate', icon:"st.doors.garage.garage-closing",action:"start"
         }
 
         standardTile("Refresh", "device.refresh", width: 2, height: 2, inactiveLabel: false, decoration: "flat") {
@@ -118,8 +109,7 @@ def parse(Map message) {
 // handle commands, 
 def configure(command) {
 	if (command?.setState) state."${command.setState.name}" = command.setState.value
-	if (command?.eodRunOnce) eodRunOnce(command.eodRunOnce.time)
-    if (!command) calibrate()
+    if (command?.getState) parent.state."${command.getState.name}" = state?."${command.getState.name}"
 }
 
 def on() {
@@ -148,18 +138,15 @@ def close() {
 
 def refresh() {
 	log.debug "refresh()"
-    state.each { k, v ->
-    	log.info "${k} : ${v}"
-    }
-    if (parent) {
-        parent.domoticz_poll(getIDXAddress())
-    }
-}
 
-def poll() {
-	log.debug "poll()"
     if (parent) {
         parent.domoticz_poll(getIDXAddress())
+    }
+    
+    if (state.blindClosingTime) {
+    	Date compTime = new Date()
+        compTime.setTime(state.blindClosingTime)
+        sendEvent(name: "completionTime", value: compTime)
     }
 }
 
@@ -180,25 +167,6 @@ def presetPosition() {
 
 }
 
-def handlerEod(data) {
-	state.eodDone = true
-    sendEvent(name:"sleeping", value:"sleeping")
-    switch (data.eodAction) {
-    case "Up":
-    	open()	
-        break;
-    case "Down":
-    	close()
-        break;
-    case "Preset":
-    	presetPosition()
-        break;
-    default:
-        log.error "Non handled eodAction(${tempEodAction})"
-        break;
-    }
-}
-
 def setLevel(level) {
 	log.debug "setLevel() level ${level}"
 	state.level = level   
@@ -207,7 +175,8 @@ def setLevel(level) {
         	if (state.blindClosingTime > 0 && state.blindClosingTime < 100000) {
         		parent.domoticz_off(getIDXAddress())
 				def Sec = Math.round(state.blindClosingTime.toInteger()/1000)
-				runIn(Sec, setLevelCloseAgain)           
+				runIn(Sec, setLevelCloseAgain)
+                sendEvent(name:'windowShade', value:"opening" as String)
 				log.debug "setLevel() ON in ${Sec} s"         		
             }
         }
@@ -225,11 +194,13 @@ def setLevelCloseAgain() {
 	Sec = Math.round(Sec*state.level.toInteger()/100) - 1
     log.debug "setLevel() Stop in ${Sec} s"
     runIn(Sec, setLevelStopAgain)
+    sendEvent(name:'windowShade', value:"closing" as String)
+
 }
 
 def setLevelStopAgain() {
 
-    if (stopSupported) {
+    if (settings.stopSupported) {
         parent.domoticz_stop(getIDXAddress())
         log.debug "setLevel() STOP"
     	}
@@ -237,13 +208,26 @@ def setLevelStopAgain() {
         parent.domoticz_on(getIDXAddress())
         log.debug "setLevel() second ON"
     	}
+    sendEvent(name:'switch', value:"Stopped" as String)
+    sendEvent(name:'windowShade', value:"partially open" as String)
+}
+// Timed Session Capability abused for calibrated Blinds
+def cancel() {
+}
+def pause() {
 }
 
+def start() {
+		log.debug "Timed Session Start()"       
+        state.calibrationInProgress = "yes"
+        def sTime = new Date().time
+        state.startCalibrationTime = sTime
+        sendEvent(name: "sessionStatus", value: "running")
+        parent.domoticz_on(getIDXAddress())
+}
 
-def calibrate() {
-    
-    if (state?.calibrationInProgress == "yes")
-    	{
+def stop() {
+		log.debug "Timed Session Stop()"       
         state.calibrationInProgress = "no"
         def eTime = new Date().time
         state.endCalibrationTime = eTime
@@ -251,29 +235,14 @@ def calibrate() {
         def sT = state.startCalibrationTime
         def blindClosingTime = (eT - sT)
         state.blindClosingTime = blindClosingTime
-		log.debug "Calibrate End() - blindClosingTime ${state.blindClosingTime} ms"       
+        Date compTime = new Date()
+        compTime.setTime(state.blindClosingTime)
+        sendEvent(name: "completionTime", value: compTime)
+        sendEvent(name: "sessionStatus", value: "stopped")
+        log.debug "Timed Session Stop() - completionTime ${state.blindClosingTime} ms"       
         parent.domoticz_off(getIDXAddress())
-        }
-    else
-    	{
-		log.debug "Calibrate Start()"       
-        state.calibrationInProgress = "yes"
-        def sTime = new Date().time
-        state.startCalibrationTime = sTime
-        parent.domoticz_on(getIDXAddress())
-        }
 }
-
-def eodRunOnce(tempTime) {
-	//this is only called by Smart Screens as a command, so add component tiles
-    def children = getChildDevices()
-    
-	if (!children) 	createComponent()
-    log.info tempTime
-    def tempEodAction = state.eodAction
-    runOnce(tempTime, handlerEod, [overwrite: false, data: ["eodAction": tempEodAction]])
-    state.eodDone = false
-    sendEvent(name:"sleeping", value:"not sleeping")
+def setCompletionTime(completionTime) {
 }
 
 private def createComponent() {
@@ -357,8 +326,6 @@ def installed() {
 }
 
 def updated() {
-	if (state.eodDone == true) sendEvent(name:"sleeping", value:"sleeping")
-    else sendEvent(name:"sleeping", value:"not sleeping")
 	initialize()
 }
 

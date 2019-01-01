@@ -14,8 +14,9 @@
  *
  */
 metadata {
-	definition (name: "domoticzSensor Temperature Measurement", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSensor Temperature Measurement", namespace: "verbem", author: "Martin Verbeek", vid:"generic-temperature") {
 		capability "Temperature Measurement"
+        capability "Health Check"
 		capability "Sensor"
 	}
 

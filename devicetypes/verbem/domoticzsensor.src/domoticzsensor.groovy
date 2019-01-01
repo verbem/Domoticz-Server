@@ -6,7 +6,7 @@
  *
  */
 metadata {
-	definition (name: "domoticzSensor", namespace: "verbem", author: "SmartThings") {
+	definition (name: "domoticzSensor", namespace: "verbem", author: "SmartThings", vid:"generic-motion-7") {
     	capability "Configuration"
 		capability "Temperature Measurement"
 		capability "Sensor"
@@ -146,29 +146,22 @@ private getIDXAddress() {
     //log.debug "Using IDX: $idx for device: ${device.id}"
     return idx
 }
-def configure(type) {  
-    def children = getChildDevices()
-    def childExists = false
+
+def configure(type) {
+    
+    def children = getChildDevices().findAll {it.deviceNetworkId.contains(type.toString()) == true}
+    def DNI
     def deviceX = type
-
-    children.each { child ->
-        if (!childExists) childExists = child.deviceNetworkId.contains(type.toString())   	
-    }
-
+    
 	if (type.matches("Custom Sensor 1|Custom Sensor 2")) {
     	deviceX = "Custom Sensor"
-    }
-
-    if (!childExists) {
-        log.info "Adding capability ${type}"
-        addChildDevice("domoticzSensor ${deviceX}", 
-                       "${device.displayName}-${type}", 
-                       null, 
-                       [completedSetup: true, label: "${device.displayName}-${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
-	}
-    else if (type?.action == "Delete") {
-    	log.info "Delete capability ${type?.capability}"
-    }
+    }    
+    
+    if (!children) {
+    	DNI = device.deviceNetworkId.split(":")[2]
+        log.info "Adding capability ${type} |${DNI}|"
+        addChildDevice("domoticzSensor ${deviceX}", "IDX:${DNI}-${type}", null, [completedSetup: true, label: "${device.displayName}-${type}", isComponent: true, componentName: "${type}", componentLabel: "${type}"])
+	} 
 }
 
 def installed() {

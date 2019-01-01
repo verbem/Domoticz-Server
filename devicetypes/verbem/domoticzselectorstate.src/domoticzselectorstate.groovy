@@ -14,11 +14,12 @@
  *
  */
 metadata {
-	definition (name: "domoticzSelectorState", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzSelectorState", namespace: "verbem", author: "Martin Verbeek", vid:"generic-button") {
 		capability "Button"
 		capability "Actuator"
 		capability "Sensor"
         capability "Switch"
+        capability "Health Check"
         
         command "buttonPress"
         attribute "labelButton", "string"

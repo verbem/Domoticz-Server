@@ -17,6 +17,8 @@ metadata {
 	definition (name: "domoticzPowerReport", namespace: "verbem", author: "Martin Verbeek") {
 		capability "Sensor"
 		capability "Actuator"
+        capability "Battery"
+        capability "Signal Strength"
 		capability "Health Check"
 		capability "Power Meter"
         capability "Power Consumption Report"

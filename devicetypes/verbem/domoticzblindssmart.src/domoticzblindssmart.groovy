@@ -23,7 +23,7 @@ import groovy.time.TimeDuration
 
 
 metadata {
-	definition (name: "domoticzBlindsSmart", namespace: "verbem", author: "Martin Verbeek") {
+	definition (name: "domoticzBlindsSmart", namespace: "verbem", author: "Martin Verbeek", vid : "generic-shade") {
     
         capability "Sensor"
 		capability "Health Check"

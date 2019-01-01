@@ -29,12 +29,11 @@
  */
 
 metadata {
-    definition (name:"domoticzScene", namespace:"verbem", author:"Martin Verbeek") {
+    definition (name:"domoticzScene", namespace:"verbem", author:"Martin Verbeek", vid:"generic-button") {
         capability "Actuator"
         capability "Sensor"
         capability "Switch"
         capability "Refresh"
-        capability "Polling"
 		capability "Health Check"
 }
 
@@ -67,14 +66,6 @@ metadata {
             status "Switch On": "switch:1"
             status "Switch Off": "switch:0"
         }
-    }
-}
-
-// switch.poll() command handler
-def poll() {
-
-    if (parent) {
-        parent.domoticz_scenepoll(getIDXAddress())
     }
 }
 

@@ -16,6 +16,8 @@
 metadata {
 	definition (name: "domoticzSensor Barometric Pressure", namespace: "verbem", author: "Martin Verbeek") {
 		capability "Sensor"
+        capability "Health Check"
+        
 		attribute "barometricPressure", "number"
 	}
 

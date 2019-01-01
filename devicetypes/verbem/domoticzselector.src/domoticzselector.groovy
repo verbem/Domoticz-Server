@@ -16,13 +16,12 @@
  */
 
 metadata {
-    definition (name:"domoticzSelector", namespace:"verbem", author:"Martin Verbeek") {
+    definition (name:"domoticzSelector", namespace:"verbem", author:"Martin Verbeek", vid:"generic-dimmer") {
         capability "Actuator"
         capability "Sensor"
         capability "Switch"
         capability "Switch Level"
         capability "Refresh"
-        capability "Polling"
         capability "Signal Strength"
 		capability "Health Check"
         
@@ -64,18 +63,10 @@ metadata {
 }
 
 // switch.poll() command handler
-def poll() {
-
-    if (parent) {
-        TRACE("poll() ${device.deviceNetworkId}")
-        parent.domoticz_poll(getIDXAddress())
-    }
-}
-
-// switch.poll() command handler
 def refresh() {
 
     if (parent) {
+    	TRACE("refresh() ${device.deviceNetworkId}")
         parent.domoticz_poll(getIDXAddress())
     }
 }
@@ -83,6 +74,7 @@ def refresh() {
 def on() {
 
     if (parent) {
+    	TRACE("on() ${device.deviceNetworkId}")
         parent.domoticz_on(getIDXAddress())
     }
 }
@@ -90,6 +82,7 @@ def on() {
 def off() {
 
     if (parent) {
+    	TRACE("off() ${device.deviceNetworkId}")
         parent.domoticz_off(getIDXAddress())
     }
 }
@@ -101,6 +94,7 @@ def setLevel(level) {
     state.setLevel = level
     def ix = level / 10
     def status = device.currentValue("selector").tokenize('|')
+    log.info status[ix.toInteger()]
     sendEvent(name : 'selectorState', value : status[ix.toInteger()])
     if (parent) {
         parent.domoticz_setlevel(getIDXAddress(), level)
@@ -137,6 +131,8 @@ def updateChildren() {
 	log.info "[updateChildren]"
     if (device.currentValue("selector") == null) return
     if (device.currentValue("prevSelector") == device.currentValue("selector")) return
+
+	parent.domoticz_selector_reset_notification(getIDXAddress(), device.currentValue("selector"))
     
     def newLevels = device.currentValue("selector").tokenize("|")
     def oldLevels

@@ -26,11 +26,10 @@
  */
 
 metadata {
-    definition (name:"domoticzDuskSensor", namespace:"verbem", author:"Martin Verbeek") {
+    definition (name:"domoticzDuskSensor", namespace:"verbem", author:"Martin Verbeek", vid: "generic-switch") {
         capability "Actuator"
         capability "Sensor"
         capability "Switch"
-        capability "Polling"
         capability "Signal Strength"
 		capability "Health Check"
     }
@@ -55,15 +54,6 @@ metadata {
         main(["richDomoticzDusk"])
         
         details(["richDomoticzDusk", "rssi"])
-    }
-}
-
-// switch.poll() command handler
-def poll() {
-
-    if (parent) {
-        TRACE("poll() ${device.deviceNetworkId}")
-        parent.domoticz_poll(getIDXAddress())
     }
 }
 
