@@ -36,7 +36,8 @@
     V7.15	temperature for thermostat in composite creation, add callable function for selector device to reset notifications
     V7.16	Temp not send to domoticzSensor native, changed doUtilityEvent to check if native sensor exists 
     V7.17	Option to assign DZ idx to Power/Gas reporting device, it will skip total computation of utility devices and take total values direct from a DZ metering device
-    v7.18	Changed setup of composite devices page so you can select utility report even no other sensors exists
+    V7.18	Changed setup of composite devices page so you can select utility report even no other sensors exists
+    V7.19	Bug fixing
  */
 
 import groovy.json.*
@@ -59,7 +60,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.18"}
+private def runningVersion() {"7.19"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -166,12 +167,6 @@ private def setupMenu() {
         uninstall   : state.setup.installed
     ]
     
-    def inputUrl = [
-        name        : "domoticzUrl",
-        type        : "text",
-        title       : "HTTP Custom Action URL for Domoticz",
-        defaultValue: urlCAH
-    ]
 	return dynamicPage(pageProperties) {
         section {
             href "setupDomoticz", title:"Configure Domoticz Server", description:"Tap to open"
@@ -187,7 +182,7 @@ private def setupMenu() {
             label title:"Assign a name", required:false
         }
         section("HTTP Custom Action URL for Domoticz") {
-            input inputUrl
+            input "domoticzUrl", "text", title: "HTTP Custom Action URL for Domoticz", defaultValue: urlCAH
             href(name: "Domoticz Setup", title: "Domoticz Setup",required: false, style: "external", url: "http://${state.networkId}/#/Setup", description: "Tap to goto Domoticz Setup page")
             paragraph "Valid setting in Domoticz? : ${state.validUrl}"
         }        
@@ -210,18 +205,10 @@ private def setupCompositeSensors() {
         install     : false,
         uninstall   : false
     ]
-    
-    def inputReportPower = [
-        name        : "domoticzReportPower",
-        type        : "bool",
-        submitOnChange : true,
-        title       : "Create Utility Report device(s)",
-        defaultValue: false
-    ]
-    
+      
     return dynamicPage(pageProperties) {
 		section {
-        	input inputReportPower
+        	input "domoticzReportPower", "bool", title: "Create Utility Report device(s)", submitOnChange: true, defaultValue: false 
         }
         if (state?.listSensors?.size() > 0) {
             section {	
@@ -248,7 +235,6 @@ private def setupCompositeSensors() {
                 }
         	}
       	}
-
 	}
 
 	addReportDevices()    
@@ -370,75 +356,7 @@ private def setupDomoticz() {
     def textPara1 =
         "Enter IP address and TCP port of your Domoticz Server, then tap " +
         "Next to continue."
-
-    def inputIpAddress = [
-        name        : "domoticzIpAddress",
-        submitOnChange : true,
-        type        : "string",
-        title       : "Local Domoticz IP Address",
-        defaultValue: "0.0.0.0"
-    ]
-
-    def inputTcpPort = [
-        name        : "domoticzTcpPort",
-        type        : "number",
-        title       : "Local Domoticz TCP Port",
-        defaultValue: "8080"
-    ]
-
-    def inputDzTypes = [
-        name        : "domoticzTypes",
-        type        : "enum",
-        title       : "Devicetypes you want to add",
-        options	    : ["Contact Sensors", "Dusk Sensors", "Motion Sensors", "On/Off/Dimmers/RGB", "Smoke Detectors", "Thermostats", "(Virtual) Sensors", "Window Coverings"],
-        multiple	: true
-    ]
     
-    def inputRoomPlans = [
-        name        : "domoticzRoomPlans",
-        submitOnChange : true,
-        type        : "bool",
-        title       : "Support Room Plans from Domoticz?",
-        defaultValue: false
-    ]
-    
-    def inputPlans = [
-        name        : "domoticzPlans",
-        type        : "enum",
-        title       : "Select the rooms",
-        options	    : state.listPlans,
-        submitOnChange : true,
-        multiple	: true
-    ]
-
-    def inputGroup = [
-        name        : "domoticzGroup",
-        type        : "bool",
-        title       : "Add Groups from Domoticz?",
-        defaultValue: false
-    ]
-    
-    def inputScene = [
-        name        : "domoticzScene",
-        type        : "bool",
-        title       : "Add Scenes from Domoticz?",
-        defaultValue: false
-    ]
-    
-    def deleteDevicesInPlans = [
-        name        : "domoticzDDIP",
-        type        : "bool",
-        title       : "Remove devices from App not related to a Roomplan anymore?",
-        defaultValue: false
-    ]
-    
-    def inputTrace = [
-        name        : "domoticzTrace",
-        type        : "bool",
-        title       : "Debug trace output in IDE log",
-        defaultValue: true
-    ]
-      
     def pageProperties = [
         name        : "setupDomoticz",
         title       : "Configure Domoticz Server",
@@ -449,18 +367,19 @@ private def setupDomoticz() {
 
     return dynamicPage(pageProperties) {
       section {
-            input inputIpAddress
-            input inputTcpPort
-            input inputDzTypes
-            if (settings.containsKey('domoticzIpAddress') && settings?.domoticzIpAddress != "0.0.0.0") input inputRoomPlans
-            if (domoticzRoomPlans && settings.containsKey('domoticzIpAddress')) input inputPlans
-            if (domoticzPlans) input deleteDevicesInPlans
-            input inputGroup
-            input inputScene
-            input inputTrace
+            input "domoticzIpAddress", "string", title: "Local Domoticz IP Address", submitOnChange: true, defaultValue: "0.0.0.0"
+            input "domoticzTcpPort", "number", title: "Local Domoticz TCP Port", defaultValue: "8080"
+            input "domoticzTypes","enum", title: "Devicetypes you want to add", options: ["Contact Sensors", "Dusk Sensors", "Motion Sensors", "On/Off/Dimmers/RGB", "Smoke Detectors", "Thermostats", "(Virtual) Sensors", "Window Coverings"], multiple: true
+            if (settings.containsKey('domoticzIpAddress') && settings?.domoticzIpAddress != "0.0.0.0") input "domoticzRoomPlans", "bool", title: "Support Room Plans from Domoticz?", submitOnChange: true, defaultValue: false
+            if (domoticzRoomPlans && settings.containsKey('domoticzIpAddress')) input "domoticzPlans","enum", title: "Select the rooms", options: state.listPlans, submitOnChange : true, multiple: true
+            if (domoticzPlans) input "domoticzDDIP", "bool", title: "Remove devices from App not related to a Roomplan anymore?", defaultValue: false
+            input "domoticzGroup","bool", title: "Add Groups from Domoticz?", defaultValue: false
+            input "domoticzScene", "bool", title: "Add Scenes from Domoticz?", defaultValue: false
+            input "domoticzTrace", "bool", title: "Debug trace output in IDE log", defaultValue: true
         	}
     }
 }
+
 
 /*-----------------------------------------------------------------------------------------*/
 /*		SET Up Configure Domoticz PAGE
@@ -468,13 +387,6 @@ private def setupDomoticz() {
 private def setupSmartThingsToDomoticz() {
     TRACE("[setupSmartThingsToDomoticz]")
      
-    def inputST2DZ = [
-        name        : "domoticzVirtualDevices",
-        submitOnChange : true,
-        type        : "bool",
-        title       : "Define native Smartthings devices as Domoticz Virtuals",
-        defaultValue: false
-    ]
     def pageProperties = [
         name        : "setupSmartThingsToDomoticz",
         title       : "Configure SmartThings to Domoticz Server",
@@ -482,9 +394,10 @@ private def setupSmartThingsToDomoticz() {
         install     : false,
         uninstall   : false
     ]
+    
     return dynamicPage(pageProperties) {
       section {
-            input inputST2DZ
+            input "domoticzVirtualDevices", "bool", title: "Define native Smartthings devices as Domoticz Virtuals", defaultValue: false
         	}
       if (domoticzVirtualDevices) {
       	section {
@@ -790,7 +703,7 @@ private def assignSensorToDevice() {
                 component = componentList.find{it.key == capability}?.value
                 if (component) getChildDevice(dni).configure(component)
             }
-            else log.error "no configure on ${dni}"
+            else if (idx.toInteger() < 10000) log.debug "no configure on ${dni}"
         }
         else log.info "no state.devices for ${idx}"
     }
@@ -1082,16 +995,16 @@ private def doUtilityEvent(evt) {
     }
 
     if (stateDevice) {
-    	TRACE("[doUtilityEvent] ${evt.idxName} ${evt.name} ${evt.value}")
         stateDevice = stateDevice.toString().split("=")[0]
 		def dni = state.devices[stateDevice].dni
         def dev = getChildDevice(dni)
-        TRACE("[doUtilityEvent] ${dev} gets ${evt.value} for ${evt.name} from idx ${evt.idx}")
-        if (dev.hasAttribute(evt.name) == true) {
+        if (dev.hasAttribute(evt.name) == true) {        	
             dev.sendEvent(name: evt.name, value: evt.value)
+        	TRACE("[doUtilityEvent] ${dev} gets ${evt.value} for ${evt.name} from idx ${evt.idx} device has attribute")
         }
         else { // parse needed in dth
             sendEvent(dev, [name: evt.name, value: evt.value])
+        	TRACE("[doUtilityEvent] ${dev} gets ${evt.value} for ${evt.name} from idx ${evt.idx} device parse() will be used")
         }
     }    
 }
@@ -1372,7 +1285,7 @@ def callbackForEveryThing(evt) {
     		if (statePower?.idxPower == it.idx) {
                 devReportPower = getChildDevice(state.devReportPower)
                 if (devReportPower) {
-                	powerUnit = it.Data.split()[1]
+                	powerUnit = it.CounterToday.split()[1]
                 	powerUsage = it.Usage.split()[1]
                     devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
@@ -1436,7 +1349,7 @@ def callbackForEveryThing(evt) {
                 }            	
             }
 		}
-}
+	}
     
 	// pass to Devices that report Usage totals but only if report device does not contain idxPower or idxGas key
     if (statePower?.containsKey("idxPower") == false) { 
@@ -1449,6 +1362,7 @@ def callbackForEveryThing(evt) {
             }
         }
     }
+    else TRACE("[callbackForEveryThing] Total usage sensor connected to Power Reporting Device")
     if (stateGas?.containsKey("idxGas") == false) { 
         if (gasUsage > 0 && state.devReportGas != null) {
             devReportGas = getChildDevice(state.devReportGas)
@@ -1459,6 +1373,7 @@ def callbackForEveryThing(evt) {
             }
         }
   	}
+    else TRACE("[callbackForEveryThing] Total usage sensor connected to Gas Reporting Device")
 }
 
 /*-----------------------------------------------------------------------------------------*/
@@ -1587,14 +1502,23 @@ def callbackStatus(evt) {
 }
 
 /*-----------------------------------------------------------------------------------------*/
-/*		dummy callback handler for speed
+/*		dummy callback handlers for speed
 /*-----------------------------------------------------------------------------------------*/
 def callbackLog(evt) {
 	// dummy handler for status returns, it prevents these responses from going into "normal" response processing
-    def response = getResponse(evt)
-   
-
+    return getResponse(evt)
 }
+
+def callbackKWHNotification(evt) {return getResponse(evt)}
+def callbackLuxNotification(evt) {return getResponse(evt)}
+def callbackHumidityNotification(evt) {return getResponse(evt)}
+def callbackAirQualityNotification(evt) {return getResponse(evt)}
+def callbackPressureNotification(evt) {return getResponse(evt)}
+def callbackSoundNotification(evt) {return getResponse(evt)}
+def callbackNotification(evt) {return getResponse(evt)}
+def callbackSensorGasNotification(evt) {return getResponse(evt)}
+def callbackSensorTempNotification(evt) {return getResponse(evt)}
+def callbackClearNotification(evt) {return getResponse(evt)}
 
 /*-----------------------------------------------------------------------------------------*/
 /*		Capture the created hardware IDX for SmartThings
@@ -1731,9 +1655,9 @@ private def defineDomoticzInSmartThings(request) {
         	dev.label = request.name
             dev.name = request.name
         }
-        
+       
         // add base device Signal Strength and Battery components if applicable
-        if (dev.hasCommand("configure")) {
+        if (request.dzStatus instanceof java.util.Map && dev.hasCommand("configure")) {
         	if (request.dzStatus?.Name.toUpperCase().contains("MOOD") && request.dzStatus?.SubType == "LightwaveRF") {
                 dev.configure("Group Off")
                 dev.configure("Group Mood 1")
@@ -2327,19 +2251,25 @@ private def socketSend(passed) {
                 passed.action = "${passed.action}%20${tValue}"
             }
         	hubPath = "/json.htm?type=command&param=addnotification&idx=${passed.idx}&ttype=${passed.type}&twhen=${tWhen}&tvalue=${tValue}&tmsg=IDX%20${passed.idx}%20${passed.action}&tsystems=http&tpriority=0&tsendalways=false&trecovery=false"
+            hubCallback = [callback: callbackNotification]
             break;
         case ["SensorKWHNotification", "SensorLuxNotification", "SensorHumidityNotification", "SensorAirQualityNotification","SensorPressureNotification", "SensorSoundNotification"]: 
         	def typeSensor = passed.request - "Sensor" - "Notification"
+            def callBack = "callback${typeSensor}Notification"
             hubPath = "/json.htm?type=command&param=addnotification&idx=${passed.idx}&ttype=5&twhen=1&tvalue=0&tmsg=SENSOR%20${passed.idx}%20${typeSensor}%20%24value&tsystems=http&tpriority=0&tsendalways=false&trecovery=false"
+            hubCallback = [callback: callBack]
             break;         
         case ["SensorGasNotification"]:       
-            hubPath = "/json.htm?type=command&param=addnotification&idx=${passed.idx}&ttype=14&twhen=0&tvalue=0&tmsg=SENSOR%20${passed.idx}%20Gas%20%24value&tsystems=http&tpriority=0&tsendalways=false&trecovery=false"
+            hubPath = "/json.htm?type=command&param=addnotification&idx=${passed.idx}&ttype=14&twhen=1&tvalue=0&tmsg=SENSOR%20${passed.idx}%20Gas%20%24value&tsystems=http&tpriority=0&tsendalways=false&trecovery=false"
+            hubCallback = [callback: callbackSensorGasNotification]
             break;         
         case "SensorTempNotification":         
             hubPath = "/json.htm?type=command&param=addnotification&idx=${passed.idx}&ttype=0&twhen=3&tvalue=-99&tmsg=SENSOR%20${passed.idx}%20Temp%20%24value&tsystems=http&tpriority=0&tsendalways=false&trecovery=false"
+            hubCallback = [callback: callbackSensorTempNotification]
             break;                
         case "ClearNotification":  
             hubPath = "/json.htm?type=command&param=clearnotifications&idx=${passed.idx}"
+            hubCallback = [callback: callbackClearNotification]
             break;
 		case "Settings":  
             hubPath = "/json.htm?type=settings"
