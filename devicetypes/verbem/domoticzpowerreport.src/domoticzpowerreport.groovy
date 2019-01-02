@@ -177,7 +177,8 @@ def takeYear() {
 }
 
 def take() {
-
+	return
+    
 	def imageCharts = "https://image-charts.com/chart?"
 	def params = [uri: "${imageCharts}chs=720x480&chd=${state.chd}&cht=bvg&chds=a&chxt=x,y&chxl=${state.chxl}&chts=0000FF,20&chco=${state.chco}&chtt=${state.chtt}&chdl=${state.chdl}"]
     
