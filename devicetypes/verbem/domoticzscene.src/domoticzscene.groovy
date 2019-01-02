@@ -6,26 +6,9 @@
  *
  *  Copyright (c) 2016 Martin Verbeek
  *
- *  This program is free software: you can redistribute it and/or modify it
- *  under the terms of the GNU General Public License as published by the Free
- *  Software Foundation, either version 3 of the License, or (at your option)
- *  any later version.
- *
- *  This program is distributed in the hope that it will be useful, but
- *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- *  for more details.
- *
- *  You should have received a copy of the GNU General Public License along
- *  with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- *
  *  Revision History
  *  ----------------
- *  2.1 2016-11-21 Rework of setColor 
- *	2.2 2016-12-01 added calibration of the closing time, now you can use setlevel or ask alexa to dim to a percentage
- *	3.0 2016-12-24 cleanup of DTH statuses
- *	3.1 2016-12-24 Implement PUSH as the button for a Scene
+ *	3.2 2019-01-02 More clean implement
  */
 
 metadata {
@@ -38,7 +21,7 @@ metadata {
 }
 
     tiles(scale:2) {
-    	multiAttributeTile(name:"richDomoticzOnOff", type:"lighting",  width:6, height:4, canChangeIcon: true, canChangeBackground: true) {
+    	multiAttributeTile(name:"richDomoticzScene", type:"lighting",  width:6, height:4, canChangeIcon: true, canChangeBackground: true) {
         	tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
                 attributeState "off", label:'Off', icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
                 attributeState "Off", label:'Off', icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
@@ -53,23 +36,16 @@ metadata {
             }
         }
         
-        standardTile("debug", "device.motion", inactiveLabel: false, decoration: "flat", width:2, height:2) {
+        standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width:2, height:2) {
             state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
         }
 
-        main(["richDomoticzOnOff"])
+        main(["richDomoticzScene"])
         
-        details(["richDomoticzOnOff", "debug"])
-
-        simulator {
-            // status messages
-            status "Switch On": "switch:1"
-            status "Switch Off": "switch:0"
-        }
+        details(["richDomoticzScene", "refresh"])
     }
 }
 
-// switch.poll() command handler
 def refresh() {
 
     if (parent) {
@@ -77,22 +53,22 @@ def refresh() {
     }
 }
 
-// switch.on() command handler
 def on() {
 
     if (parent) {
         parent.domoticz_sceneon(getIDXAddress())
         parent.domoticz_scenepoll(getIDXAddress())
     }
+    sendEvent(name:"switch", value: "on")
 }
 
-// switch.off() command handler
 def off() {
 
     if (parent) {
         parent.domoticz_sceneoff(getIDXAddress())
         parent.domoticz_scenepoll(getIDXAddress())
     }
+    sendEvent(name:"switch", value: "off")
 }
 
 private def TRACE(message) {
@@ -103,6 +79,7 @@ private def STATE() {
     log.debug "switch is ${device.currentValue("switch")}"
     log.debug "deviceNetworkId: ${device.deviceNetworkId}"
 }
+
 // gets the IDX address of the device
 private getIDXAddress() {
 	
