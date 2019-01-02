@@ -1343,8 +1343,8 @@ def callbackForEveryThing(evt) {
     		if (stateGas?.idxGas == it.idx) {
                 devReportGas = getChildDevice(state.devReportGas)
                 if (devReportGas) {
-                    devReportGas.sendEvent(name:"energyMeter", value: "${it.Counter.round(3)}", unit:gasUnit)
-                    devReportGas.sendEvent(name:"power", value: it.CounterToday.split()[0].round(3), unit:gasUnit)
+                    devReportGas.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(3)}", unit:gasUnit)
+                    devReportGas.sendEvent(name:"power", value: it.CounterToday.split()[0].toDouble().round(3), unit:gasUnit)
                     devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
                 }            	
             }
