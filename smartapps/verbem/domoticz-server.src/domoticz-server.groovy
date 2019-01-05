@@ -1326,7 +1326,7 @@ def callbackForEveryThing(evt) {
                 	powerUsage = it.Usage.split()[1]
                     devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
-                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}"))
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${it.Data} Today:${it.CounterToday}"))
                 }            	
             }
         }
@@ -1346,7 +1346,7 @@ def callbackForEveryThing(evt) {
                     def w = it.Usage.split()[0].toDouble().round(0)
                     devReportPower.sendEvent(name:"energyMeter", value: "${k}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: w, unit:powerUsage)
-                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}"))
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${it.Data} Today:${it.CounterToday}"))
                 }            	
             }
 			//add idxPower to real device by matching the ID
@@ -1382,7 +1382,7 @@ def callbackForEveryThing(evt) {
                 if (devReportGas) {
                     devReportGas.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(3)}", unit:gasUnit)
                     devReportGas.sendEvent(name:"power", value: it.CounterToday.split()[0].toDouble().round(3), unit:gasUnit)
-                    devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}"))
+                    devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${it.Data} Today:${it.CounterToday}"))
 
                 }            	
             }
