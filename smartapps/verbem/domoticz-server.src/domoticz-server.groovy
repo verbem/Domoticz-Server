@@ -1543,32 +1543,38 @@ def handleList(evt) {
 /*-----------------------------------------------------------------------------------------*/
 /*		transform old style scene IDX to NEW Style (add and S in front of the IDX)
 /*-----------------------------------------------------------------------------------------*/
-private def handleSceneTransformation(sceneList) {
-
-	return
-    
+private def handleSceneTransformation(sceneList) {   
 	def scene
-    def oldIdx
+    def newIdx
+    
 	sceneList.each{ sceneIdx ->
-    	oldIdx = sceneIdx - "S"
-    	if (sceneIdx.contains("S") == false){
+		
+    	if (sceneIdx.contains("S") == false) {   
+        	
+        	newIdx = "S" + sceneIdx
         	scene = getChildDevice("${app.id}:IDX:${sceneIdx}")
+            
             if (scene) {
-            	scene.deviceNetworkId = "${app.id}:IDX:S${sceneIdx}"
+            	scene.deviceNetworkId = "${app.id}:IDX:${newIdx}"
                 log.info "[handleSceneTransformation] existing device for old scene device ${sceneIdx} transformed!"
                 
-                if (state?.devices["${sceneIdx}"].deviceType == "domoticzScene") {
-					log.info "[handleSceneTransformation] existing state for old scene device ${sceneIdx} transformed!"                	
+                if (state?.devices[sceneIdx].deviceType == "domoticzScene") {
+					state.devices[newIdx] = state.devices[sceneIdx]
+                    state.devices[newIdx].dni = scene.deviceNetworkId
+                    state.devices[newIdx].idx = newIdx
+                    state.devices.remove(sceneIdx)
+					log.info "[handleSceneTransformation] state for old type scene device ${sceneIdx} transformed!"                	
                 }
                 
-                else if (state?.devices["S${sceneIdx}".deviceType == "domoticzScene"]) {
-                	log.error "[handleSceneTransformation] already existing state for new scene device S${sceneIdx}"
+                else if (state?.devices[newIdx].deviceType == "domoticzScene") {
+                    state.devices[newIdx].dni = scene.deviceNetworkId
+                    state.devices[newIdx].idx = newIdx
+                	log.warn "[handleSceneTransformation] existing state for new scene device ${newIdx}"
                 }
             }
             else log.error "[handleSceneTransformation] non existing scene device ${sceneIdx}"
         }
     }
-
 }
 /*-----------------------------------------------------------------------------------------*/
 /*		callback for getting single device status
