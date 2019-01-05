@@ -900,14 +900,14 @@ void callbackForUCount(evt) {
 	response.result.each { utility ->
 		// Power usage    
     	if (utility?.SubType == "kWh") {
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value: utility.Usage.split()[0].toDouble().round(1)])
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson(utility.Data)])          
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: utility.Data.split()[0].toDouble().round(1)])          
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value: utility.Usage.split()[0].toDouble().round(1), unit:utility.Usage.split()[1].toString()])
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}")])          
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: utility.Data.split()[0].toDouble().round(1), unit:utility.Data.split()[1].toString()])          
         }
     	if (utility?.SubType == "Energy") {
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value:utility.Usage.split()[0].toDouble().round(0)])
-            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson(utility.Data)])          
-            if (utility?.CounterToday) doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: utility.CounterToday.split()[0].toDouble().round(0)])          
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"power", value:utility.Usage.split()[0].toDouble().round(0), unit:utility.Usage.split()[1].toString()])
+            doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}")])          
+            if (utility?.CounterToday) doUtilityEvent([idx: utility.idx, idxName: "idxPower", name:"energyMeter", value: utility.CounterToday.split()[0].toDouble().round(0), unit:utility.Data.split()[1].toString()])          
         }
         // Motion        
     	if (utility?.SwitchTypeVal == 8) {
@@ -1326,7 +1326,7 @@ def callbackForEveryThing(evt) {
                 	powerUsage = it.Usage.split()[1]
                     devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
-                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}"))
                 }            	
             }
         }
@@ -1346,7 +1346,7 @@ def callbackForEveryThing(evt) {
                     def w = it.Usage.split()[0].toDouble().round(0)
                     devReportPower.sendEvent(name:"energyMeter", value: "${k}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: w, unit:powerUsage)
-                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}"))
                 }            	
             }
 			//add idxPower to real device by matching the ID
@@ -1382,7 +1382,8 @@ def callbackForEveryThing(evt) {
                 if (devReportGas) {
                     devReportGas.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(3)}", unit:gasUnit)
                     devReportGas.sendEvent(name:"power", value: it.CounterToday.split()[0].toDouble().round(3), unit:gasUnit)
-                    devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson(it.Data))
+                    devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${utility.Data} Today:${utility.CounterToday}"))
+
                 }            	
             }
 		}
