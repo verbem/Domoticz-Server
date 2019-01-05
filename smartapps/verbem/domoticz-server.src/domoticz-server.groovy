@@ -38,6 +38,8 @@
     V7.17	Option to assign DZ idx to Power/Gas reporting device, it will skip total computation of utility devices and take total values direct from a DZ metering device
     V7.18	Changed setup of composite devices page so you can select utility report even no other sensors exists
     V7.19	Bug fixing
+    V7.20	real time update of scene/group status, look if an event has to do with a device that is part of a group/scene and requestr a refresh of the related group/scene
+    		also fixed a potential problem with scenes and group unique dni issue. THIS WILL ADD NEW GROUP/SCENE DEVICES...PLEASE DELETE OLD ONES MANUALLY.
  */
 
 import groovy.json.*
@@ -60,7 +62,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.19"}
+private def runningVersion() {"7.20"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -589,7 +591,6 @@ private def initialize() {
 	state.optionsSound			= [:]
 	state.optionsCustom			= [:]
 
-    updateDeviceList()
 	addReportDevices()
     assignSensorToDevice()
     
@@ -624,7 +625,7 @@ private def initialize() {
     if 	(cleanUpNeeded() == true) {
         if (state?.runUpdateRoutine != runningVersion()) runUpdateRoutine()
         state.runUpdateRoutine = runningVersion()
-    }    
+    }
     
 	aliveChecker()
 	runEvery5Minutes(aliveChecker)        
@@ -632,13 +633,27 @@ private def initialize() {
 }
 
 private def runUpdateRoutine() {
+// check for old style SCENE / GROUP dni
+return
+	TRACE("[runUpdateRoutine]")
+    def idx
+    def scenes = getChildDevices().findAll{it.typeName == "domoticzScene"}
+    
+    scenes.each { scene ->
+    	idx = scene.deviceNetworkId.split(":")[2]
+        idx = app.id + ":IDX:" + idx 
+        log.info idx
+    	//scene.deviceNetworkId = 
+    }
 
+    
+	pause 5
 }
 
 private def clearAllNotifications() {
 	state.devices.each {key, item ->
 		if (item.type == "switch") {
-        	TRACE("Clear Notifications for Devices ${item.type} ${item.dni} idx ${item.idx}")
+        	TRACE("[clearAllNotifications] Clear Notifications for Devices ${item.type} ${item.dni} idx ${item.idx}")
         	socketSend([request : "ClearNotification", idx : item.idx])
             pause 2
         }
@@ -647,7 +662,7 @@ private def clearAllNotifications() {
 	def options = state.findAll { key, value -> key.startsWith("options") }
     options.each { key, sensor ->
     	sensor.each { idx, content ->
-        	TRACE("Clear Notifications for Sensor ${content} idx ${idx}")
+        	TRACE("[clearAllNotifications] Clear Notifications for Sensor ${content} idx ${idx}")
         	socketSend([request : "ClearNotification", idx : idx])
             pause 2        
         }
@@ -671,7 +686,7 @@ private def assignSensorToDevice() {
                     state.devices[key]."${k}" = null
                 }
                 if (k == "idxPower" && getChildDevice(dev.dni).hasCommand("configure")) {
-                    getChildDevice(dev.dni).configure("Graph")
+                    //getChildDevice(dev.dni).configure("Graph")
                 }
          	}
     	}
@@ -984,7 +999,7 @@ private def doUtilityEvent(evt) {
 	if (state.devices[evt.idx]?.dni) {
         def nativeDni = state.devices[evt.idx].dni
     	def nativeDev = getChildDevice(nativeDni)
-    	if (nativeDev.hasAttribute(evt.name) == true) {
+    	if (nativeDev && nativeDev.hasAttribute(evt.name) == true) {
 			TRACE("[doUtilityEvent] native idx found ${evt.idx} ${evt.name} ${evt.value}")
         	nativeDev.sendEvent(name: evt.name, value: evt.value)
         }
@@ -1008,7 +1023,6 @@ private def doUtilityEvent(evt) {
         }
     }    
 }
-
 /*-----------------------------------------------------------------------------------------*/
 /*		Build the idx list for Devices that are part of the selected room plans
 /*-----------------------------------------------------------------------------------------*/
@@ -1023,9 +1037,7 @@ void callbackForRoom(evt) {
             state.listOfRoomPlanDevices.add(it.devidx)
         }
     }
-    pause 3
 }
-
 /*-----------------------------------------------------------------------------------------*/
 /*		Get Room Plans defined into Selectables for setupDomoticz
 /*-----------------------------------------------------------------------------------------*/
@@ -1039,14 +1051,27 @@ void callbackForPlans(evt) {
     state.listPlans = response.result.collect{it.Name}.sort()
 
 }
+/*-----------------------------------------------------------------------------------------*/
+/*		proces for adding and updating status for Scenes and Groups
+/*-----------------------------------------------------------------------------------------*/
+void callbackForScenesUpdate(evt) {
+    def response = getResponse(evt)
+	if (response?.result == null) return
 
+    TRACE("[callbackForScenesUpdate] Domoticz response with Title : ${response.title} number of items returned ${response.result.size()}") 
+	response?.result.each {
+    	if ((it.Type == "Scene" && domoticzScene) || (it.Type == "Group" && domoticzGroup)) {
+        	defineDomoticzInSmartThings([idx:"S${it.idx}", deviceType: "domoticzScene", subType: it.Type, name: it.Name, dzStatus: it, updateEvents:true])
+        }
+    }
+}
 /*-----------------------------------------------------------------------------------------*/
 /*		proces for adding and updating status for Scenes and Groups
 /*-----------------------------------------------------------------------------------------*/
 void callbackForScenes(evt) {
     def response = getResponse(evt)
     def groupIdx = response?.result.collect {it.idx}.sort()
-    state.statusGrpRsp = groupIdx
+    state.statusScenes = groupIdx
     pause 2
 
 	if (response?.result == null) return
@@ -1054,18 +1079,32 @@ void callbackForScenes(evt) {
     TRACE("[callbackForScenes] Domoticz response with Title : ${response.title} number of items returned ${response.result.size()}") 
 
 	response?.result.each {
-        TRACE("[callbackForScenes] ${it.Type} ${it.Name} ${it.Status} ${it.Type}")
-        switch (it.Type) {
-        case "Scene":
-            if (domoticzScene) {defineDomoticzInSmartThings([idx:it.idx, deviceType: "domoticzScene", subType: "Scene", name: it.Name, dzStatus: it.Status, updateEvents:false])}
-            break;
-        case "Group":
-            if (domoticzGroup) {defineDomoticzInSmartThings([idx:it.idx, deviceType: "domoticzScene", subType: "Group", name: it.Name, dzStatus: it.Status, updateEvents:false])}
-            break;
-        }    
+    	if ((it.Type == "Scene" && domoticzScene) || (it.Type == "Group" && domoticzGroup)) {  
+        	defineDomoticzInSmartThings([idx:"S${it.idx}", deviceType: "domoticzScene", subType: it.Type, name: it.Name, dzStatus: it, updateEvents:true])
+        }
+    }
+	state.sceneGroupDevices = [:]   
+    //kick off the first of the callback sequence to fill a correct map with info in the right order.
+    if (groupIdx.size() > 0) {
+    	socketSend([request : "sceneListDevices", idx : groupIdx.get(0)])
     }
 }
+/*-----------------------------------------------------------------------------------------*/
+/*		Get devices that are part of a scene and store the in the listGroups
+/*		so we can check later if a device notification could also trigger a scene/group switch
+/*-----------------------------------------------------------------------------------------*/
+void callbackSceneListDevices(evt) {
+	def response = getResponse(evt)
+	if (response?.result == null) return
 
+	TRACE("[callbackSceneListDevices] Domoticz response with Title : ${response.title} number of items returned ${response.result.size()}")
+    def idxGroup = (state.sceneGroupDevices.size()).toString()
+	if (idxGroup.toInteger() < state.statusScenes.size()) state.sceneGroupDevices[idxGroup] = [sceneIdx: state.statusScenes.get(idxGroup.toInteger()), result: response.result]
+
+    if (state.statusScenes.size() > state.sceneGroupDevices.size()) {
+        socketSend([request : "sceneListDevices", idx : state.statusScenes.get(idxGroup.toInteger()+1)])
+    }
+}
 /*-----------------------------------------------------------------------------------------*/
 /*		callback for adding and updating status of devices in SmartThings
 /*-----------------------------------------------------------------------------------------*/
@@ -1204,7 +1243,6 @@ private def callbackForDevices(statusrsp) {
 def callbackForEveryThing(evt) {
     def response = getResponse(evt)
 	if (response?.result == null) return
-	TRACE("[callbackForEveryThing]")    
     
     def kwh = 0f
     def watt = 0f
@@ -1220,8 +1258,7 @@ def callbackForEveryThing(evt) {
     def stateGas = state?.devices["10001"]
     def devReportPower
     def devReportGas
-
-    
+   
     response.result.each {
 		//TEMP		    	        
         if (it?.Type.contains("Temp")) {
@@ -1441,42 +1478,53 @@ def callbackForCounters(evt) {
 /*		callback for getting all devices 
 /*-----------------------------------------------------------------------------------------*/
 def handleList(evt) {
-	TRACE("[handleList]")
     def response = getResponse(evt) 
-   	if (response?.status == "ERR") return   
     if (response?.result == null) return
     
-	def nextIdxList = response.result.collect {it.idx}.sort()
-	def currentIdxList
+	def nextIdxList = response.result.findAll{it.Type.matches("Scene|Group") == false}.collect {it.idx}.sort()
+	def nextSceneList = response.result.findAll{it.Type.matches("Scene|Group") == true}.collect {"S${it.idx}"}.sort()
+    def currentIdxList
+    def currentSceneList
     
     if (state.statusrsp) currentIdxList = state.statusrsp
     else currentIdxList = nextIdxList
-        
-    def dzAddedList = nextIdxList.minus(currentIdxList)
-    TRACE("[handleList] New in Domoticz ${dzAddedList}")
+
+	if (state.statusGrpRsp) {
+    	currentSceneList = state.statusGrpRsp
+        handleSceneTransformation(currentSceneList)
+    }
+    else currentSceneList = nextSceneList
     
+        
+    def dzAddedList = nextIdxList.minus(currentIdxList)  
     def dzDeletedList = currentIdxList.minus(nextIdxList)
-    TRACE("[handleList] Deleted, remove child devices ${dzDeletedList}")
+    TRACE("[handleList] Deleted devices, remove child devices ${dzDeletedList}")
+    
+    def sceneAddedList = nextSceneList.minus(currentSceneList)
+    def sceneDeletedList = currentSceneList.minus(nextSceneList)
+    TRACE("[handleList] Deleted scenes, remove child devices ${sceneDeletedList}")
     
 	if (state.devices) {
 		def stateIdxList = state.devices.collect {it.key}.sort()
         def stateToDeleteList = stateIdxList.minus(nextIdxList)
+        stateToDeleteList = stateToDeleteList.minus(nextSceneList)
         stateToDeleteList = stateToDeleteList.minus(["10000", "10001"])
 
-        dzDeletedList.each { idx ->
+        dzDeletedList.plus(sceneDeletedList).each { idx ->
             try {
                 deleteChildDevice(app.id + ":IDX:" + idx)
+                TRACE("[handleList] deleted child ${app.id + ":IDX:" + idx}")
             }
             catch (e) {
                 log.error "[handleList] error deleting child ${app.id + ":IDX:" + idx}"
             }
         }
-              
+             
     	TRACE("[handleList] Delete from State devices ${stateToDeleteList}")  
         stateToDeleteList.each {state.devices.remove(it)}
 		stateToDeleteList = []
         
-        def childIdxList = getChildDevices().collect { if (it.deviceNetworkId.tokenize(":")[2].toInteger() < 10000) it.deviceNetworkId.tokenize(":")[2]}.findAll{it != null}.sort()
+        def childIdxList = getChildDevices().collect { it.deviceNetworkId.tokenize(":")[2]}.findAll{it != null}.sort()
         //no child exists for dni in state...remove
         state.devices.each { key, item ->
         	if (item.containsKey("dni") && !getChildDevice(item.dni)) stateToDeleteList.add(key)
@@ -1489,9 +1537,39 @@ def handleList(evt) {
     pause 2
     callbackForDevices(response)    
     state.statusrsp = nextIdxList
+    state.statusGrpRsp = nextSceneList
     state.listInprogress = false
 }
+/*-----------------------------------------------------------------------------------------*/
+/*		transform old style scene IDX to NEW Style (add and S in front of the IDX)
+/*-----------------------------------------------------------------------------------------*/
+private def handleSceneTransformation(sceneList) {
 
+	return
+    
+	def scene
+    def oldIdx
+	sceneList.each{ sceneIdx ->
+    	oldIdx = sceneIdx - "S"
+    	if (sceneIdx.contains("S") == false){
+        	scene = getChildDevice("${app.id}:IDX:${sceneIdx}")
+            if (scene) {
+            	scene.deviceNetworkId = "${app.id}:IDX:S${sceneIdx}"
+                log.info "[handleSceneTransformation] existing device for old scene device ${sceneIdx} transformed!"
+                
+                if (state?.devices["${sceneIdx}"].deviceType == "domoticzScene") {
+					log.info "[handleSceneTransformation] existing state for old scene device ${sceneIdx} transformed!"                	
+                }
+                
+                else if (state?.devices["S${sceneIdx}".deviceType == "domoticzScene"]) {
+                	log.error "[handleSceneTransformation] already existing state for new scene device S${sceneIdx}"
+                }
+            }
+            else log.error "[handleSceneTransformation] non existing scene device ${sceneIdx}"
+        }
+    }
+
+}
 /*-----------------------------------------------------------------------------------------*/
 /*		callback for getting single device status
 /*-----------------------------------------------------------------------------------------*/
@@ -1625,13 +1703,7 @@ private def defineDomoticzInSmartThings(request) {
         else {
             log.debug "[defineDomoticzInSmartThings] Device ${request.name} offline"
             devOffline(dev)
-        } 
-        // set vid and ocfdevicetype
-        if (request.deviceType == "domoticzBlinds") {
-        	vid = "generic-shade"
-            ocfdevicetype = "oic.d.blind"
-        }
-        
+        }       
     }
     
     if (dev) {      
@@ -1703,11 +1775,10 @@ private def defineDomoticzInSmartThings(request) {
         catch (e) { 
             log.error "[defineDomoticzInSmartThings] Cannot create child device. ${devParam} Error: ${e}" 
         }
-    }
-    else return
-    
+    }  	else return
+	
     if (request.dzStatus instanceof java.util.Map) { 
-    	if (request.updateEvents) {       
+    	if (request.updateEvents == true) { 
         	def attributeList = createAttributes(dev, request.dzStatus, request.idx)
         	generateEvent(dev, attributeList)
         }
@@ -1938,76 +2009,6 @@ private def addReportDevices() {
         }
     }
 }
-
-/*-----------------------------------------------------------------------------------------*/
-/*		Purge devices that were removed from Domoticz
-/*-----------------------------------------------------------------------------------------*/
-def updateDeviceList() {
-	if (state.alive == false) return		// never execute when OFFLINE
-
-    TRACE("[updateDeviceList]")
-    def deletedDevices = new ArrayList()
-    def findrspDevice
-    def findrspGroup
-    def inStatusrsp
-    def Idx
-    def allChildren = getAllChildDevices()
-    def temprspDevices 
-
-	if (settings.domoticzDDIP == true) {
-		temprspDevices = state.listOfRoomPlanDevices
-        pause 5
-    }
-    else {
-        temprspDevices = state.statusrsp
-        pause 5
-    }
-    
-    def tempStateDevices = [:] << state.devices      
-    pause 5
-    def temprspGroups = state.statusGrpRsp
-    pause 5
-    
-    TRACE("${tempStateDevices?.size()} state Devices : ${tempStateDevices?.collect {it.value.idx as int}.sort()}")
-       
-    allChildren.each { child ->
-    	
-    	findrspDevice = temprspDevices.find {it == child.deviceNetworkId.split(":")[2] }
-    	findrspGroup = temprspGroups.find {it == child.deviceNetworkId.split(":")[2] }
-        Idx = child.deviceNetworkId.split(":")[2]
-
-        if (Idx.matches("10000|10001") == false ) {   // special devices that should not be deleted automatically have idx > 10000
-            if (!findrspDevice && !findrspGroup) {
-                TRACE("[updateDeviceList] NOT FOUND ${child.name} delete childDevice")
-                try {
-                	deleteChildDevice(child.deviceNetworkId)
-                }
-                catch (e) {
-                	log.error "[updateDeviceList] ${e} during delete"
-                }
-             
-            }
-      	}
-    }
-    // remove all USED devices in DZ, unused will remain
-	temprspDevices.each { idx ->
-		tempStateDevices.remove(idx)		    	
-    }
-
-	if (tempStateDevices.size() > 0) {
-        def copyStateDevices = [:] << state.devices  
-
-        tempStateDevices.each { idx, item ->
-            TRACE("removing from STATE ${idx}")
-            copyStateDevices.remove(idx)
-            // ClearNotification in DZ for idx
-            socketSend([request : "ClearNotification", idx : idx])
-        }
-
-        state.devices = copyStateDevices
-        pause 5
-    }
-}
  
 private def getDeviceListAsText(type) {
     String s = ""
@@ -2069,6 +2070,7 @@ def domoticz_poll(nid) {
 }
 
 def domoticz_scenepoll(nid) {
+	nid = nid - "S"
 	socketSend([request : "scenes", idx : nid])
 }
 
@@ -2078,10 +2080,14 @@ def domoticz_off(nid) {
 
 def domoticz_sceneoff(nid) {
     // find out if it is a scene or a group, scenes do only ON commands
-    if (state.devices[nid].subType == "Scene") 
+    if (state.devices[nid].subType == "Scene") {
+    	nid = nid - "S"
 		socketSend([request : "sceneon", idx : nid])
-    else 
+    }
+    else {
+        nid = nid - "S"
 		socketSend([request : "sceneoff", idx : nid])
+    }
 }
 
 def domoticz_on(nid) {
@@ -2089,6 +2095,7 @@ def domoticz_on(nid) {
 }
 
 def domoticz_sceneon(nid) {
+	nid = nid - "S"
     socketSend([request : "sceneon", idx : nid])
 }
 
@@ -2188,6 +2195,10 @@ private def socketSend(passed) {
         	hubPath = "/json.htm?type=scenes"
             hubCallback = [callback: callbackForScenes]
  			break;
+        case "scenesUpdate":
+        	hubPath = "/json.htm?type=scenes"
+            hubCallback = [callback: callbackForScenesUpdate]
+ 			break;
 		case "roomplans":
         	hubPath = "/json.htm?type=plans&order=name&used=true"
             hubCallback = [callback: callbackForPlans]
@@ -2201,6 +2212,10 @@ private def socketSend(passed) {
             break;
         case "sceneoff":
         	hubPath = "/json.htm?type=command&param=switchscene&idx=${passed.idx}&switchcmd=Off"
+            break;            
+        case "sceneListDevices":
+        	hubPath = "/json.htm?type=command&param=getscenedevices&idx=${passed.idx}&isscene=true"
+            hubCallback = [callback: callbackSceneListDevices]
             break;            
 		case "alive":
 			hubPath = "/json.htm?type=devices&rid=0"
@@ -2305,7 +2320,7 @@ private def socketSend(passed) {
     	log.error "Error in calling socketsend!!! check hubPath/Request assignment"
         return
     }
-	TRACE("[socketSend] callbackhandler: [${hubCallback.callback}]")
+	TRACE("[socketSend] callbackhandler: ${hubCallback.callback}")
     sendHubCommand(new physicalgraph.device.HubAction(method: "GET", path: hubPath, headers: [HOST: "${state.networkId}"], null, hubCallback))
     pause 5
 }
@@ -2434,7 +2449,7 @@ void refreshDevicesFromDomoticz() {
 def eventDomoticz() {
 	
     aliveResponse()
-    //log.trace params
+    
 	if (settings?.domoticzVirtualDevices == true) {
         if (params.message.contains("IDX ") && params.message.split().size() == 3) {
             def idx = params.message.split()[1]
@@ -2511,8 +2526,8 @@ def eventDomoticz() {
         }
         
 		if (!getChildDevice(dni)) { // device has been deleted and notifications still present.
-        	log.error "[eventDomoticz] IDX with no STATE ${params.message}"
-        	socketSend([request : "status", idx : idx])
+        	log.error "[eventDomoticz] IDX with no defined Device ${params.message}"
+        	//socketSend([request : "status", idx : idx])
             socketSend([request : "ClearNotification", idx : idx])	// let the app redefine notification
         }
         else {        
@@ -2534,6 +2549,14 @@ def eventDomoticz() {
                 socketSend([request : "status", idx : idx])
                 socketSend([request : "utilityCount", idx : idx])
             }
+            if (state.sceneGroupDevices) {
+            	state.sceneGroupDevices.each { index, scene ->
+                    if (scene.result.find {it.DevRealIdx == idx}) {
+                    	TRACE("[eventDomoticz] found group device ${idx} in scene-group ${scene.sceneIdx} requesting status from Domoticz")
+                        socketSend([request : "scenesUpdate"])
+                    }
+                }
+            }
     	}
     }
     else if (params.message.contains("SENSOR ") && params.message.split().size() != 4) {
@@ -2550,7 +2573,7 @@ def eventDomoticz() {
             else typeValue = typeValue.toFloat().round(0).toInteger()
             
             if (typeSensor.matches("KWH|Lux|Gas|AirQuality|Sound|Pressure|Temp")) {
-            	TRACE("[eventDomoticz] ${params.message}")
+            	//TRACE("[eventDomoticz] ${params.message}")
                 doUtilityEvent([idx: idx, idxName: typeSensor, name:"", value:typeValue])
             }
             else socketSend([request : "utilityCount", idx : idx])
