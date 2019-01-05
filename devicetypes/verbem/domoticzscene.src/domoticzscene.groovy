@@ -23,17 +23,17 @@ metadata {
     tiles(scale:2) {
     	multiAttributeTile(name:"richDomoticzScene", type:"lighting",  width:6, height:4, canChangeIcon: true, canChangeBackground: true) {
         	tileAttribute("device.switch", key: "PRIMARY_CONTROL") {
-                attributeState "off", label:'Off', icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
-                attributeState "Off", label:'Off', icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
-                attributeState "OFF", label:'Off',icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
+                attributeState "off", label:'Off', icon:"st.lights.philips.hue-multi", backgroundColor:"#ffffff", action:"on", nextState:"On"
+                attributeState "Off", label:'Off', icon:"st.lights.philips.hue-multi", backgroundColor:"#ffffff", action:"on", nextState:"On"
+                attributeState "OFF", label:'Off',icon:"st.lights.philips.hue-multi", backgroundColor:"#ffffff", action:"on", nextState:"On"
               
-                attributeState "on", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
-                attributeState "On", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
-                attributeState "ON", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
+                attributeState "on", label:'On', icon:"st.lights.philips.hue-multi", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
+                attributeState "On", label:'On', icon:"st.lights.philips.hue-multi", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
+                attributeState "ON", label:'On', icon:"st.lights.philips.hue-multi", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
 
-				attributeState "Mixed", label:'Mixed', icon:"st.lights.philips.hue-single", backgroundColor:"#e86d13", action:"on", nextState:"On"
-				attributeState "mixed", label:'Mixed', icon:"st.lights.philips.hue-single", backgroundColor:"#e86d13", action:"on", nextState:"On"
-				attributeState "MIXED", label:'Mixed', icon:"st.lights.philips.hue-single", backgroundColor:"#e86d13", action:"on", nextState:"On"
+				attributeState "Mixed", label:'Mixed', icon:"st.lights.philips.hue-multi", backgroundColor:"#e86d13", action:"on", nextState:"On"
+				attributeState "mixed", label:'Mixed', icon:"st.lights.philips.hue-multi", backgroundColor:"#e86d13", action:"on", nextState:"On"
+				attributeState "MIXED", label:'Mixed', icon:"st.lights.philips.hue-multi", backgroundColor:"#e86d13", action:"on", nextState:"On"
 
 				attributeState "Error", label:"Install Error", backgroundColor: "#bc2323"
             }
