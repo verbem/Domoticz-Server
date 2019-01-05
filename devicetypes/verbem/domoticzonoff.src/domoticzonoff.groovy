@@ -79,7 +79,7 @@ metadata {
                 
             }
             tileAttribute ("device.power", key: "SECONDARY_CONTROL") {
-                attributeState "power", label:'${currentValue}', icon: "st.Appliances.appliances17"
+                attributeState "power", label:'${currentValue} W', icon: "st.Appliances.appliances17"
             }            
             tileAttribute("device.level", key: "SLIDER_CONTROL") {
             	attributeState "level", label:'${currentValue}', action:"setLevel" 
@@ -88,6 +88,11 @@ metadata {
         		attributeState "color", action:"setColor"
             }
         }
+        
+        valueTile("powerConsumptionTile", "device.powerConsumption", width: 6, height: 2) {
+        	state "powerConsumption", label:'${currentValue}', defaultState: true
+    }
+
 
 		standardTile("refresh", "device.motion", decoration: "flat", width:1, height:1) {
             state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
@@ -118,7 +123,7 @@ metadata {
         main(["richDomoticzOnOff"])
         details(["richDomoticzOnOff", "Group Off", "Group Mood 1", "Group Mood 2", "Group Mood 3", "Group Mood 4", "Group Mood 5",
         	"Effect None", "Effect Colorloop", "Alert None", "Alert Select", "Alert Lselect",
-        	"sensorSignalStrength", "sensorBattery", "day", "week", "month", "year", "graph", "refresh"])
+        	"sensorSignalStrength", "sensorBattery", "day", "week", "month", "year", "graph", "powerConsumptionTile", "refresh"])
     }
 }
 
