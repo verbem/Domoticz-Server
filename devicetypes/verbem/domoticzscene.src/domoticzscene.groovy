@@ -18,7 +18,7 @@ metadata {
         capability "Switch"
         capability "Refresh"
 		capability "Health Check"
-}
+	}
 
     tiles(scale:2) {
     	multiAttributeTile(name:"richDomoticzScene", type:"lighting",  width:6, height:4, canChangeIcon: true, canChangeBackground: true) {
@@ -26,12 +26,15 @@ metadata {
                 attributeState "off", label:'Off', icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
                 attributeState "Off", label:'Off', icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
                 attributeState "OFF", label:'Off',icon:"st.lights.philips.hue-single", backgroundColor:"#ffffff", action:"on", nextState:"On"
-                //attributeState "Turning Off", label:'Turning Off', icon:"st.lights.philips.hue-single", backgroundColor:"#FE9A2E", nextState:"Turning On"
-                
-                attributeState "on", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off", nextState:"Off"
-                attributeState "On", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off", nextState:"Off"
-                attributeState "ON", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off", nextState:"Off"
-                //attributeState "Turning On", label:'Turning On', icon:"st.lights.philips.hue-single", backgroundColor:"#FE9A2E", nextState:"Turning Off"
+              
+                attributeState "on", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
+                attributeState "On", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
+                attributeState "ON", label:'On', icon:"st.lights.philips.hue-single", backgroundColor:"#79b821", action:"off"//, nextState:"Off"
+
+				attributeState "Mixed", label:'Mixed', icon:"st.lights.philips.hue-single", backgroundColor:"#e86d13", action:"on", nextState:"On"
+				attributeState "mixed", label:'Mixed', icon:"st.lights.philips.hue-single", backgroundColor:"#e86d13", action:"on", nextState:"On"
+				attributeState "MIXED", label:'Mixed', icon:"st.lights.philips.hue-single", backgroundColor:"#e86d13", action:"on", nextState:"On"
+
 				attributeState "Error", label:"Install Error", backgroundColor: "#bc2323"
             }
         }
@@ -57,7 +60,7 @@ def on() {
 
     if (parent) {
         parent.domoticz_sceneon(getIDXAddress())
-        parent.domoticz_scenepoll(getIDXAddress())
+        //parent.domoticz_scenepoll(getIDXAddress())
     }
     sendEvent(name:"switch", value: "on")
 }
@@ -66,9 +69,9 @@ def off() {
 
     if (parent) {
         parent.domoticz_sceneoff(getIDXAddress())
-        parent.domoticz_scenepoll(getIDXAddress())
-    }
-    sendEvent(name:"switch", value: "off")
+        //parent.domoticz_scenepoll(getIDXAddress())
+        if (parent.state.devices[getIDXAddress()].subType == "Group") sendEvent(name:"switch", value: "off") else sendEvent(name:"switch", value: "on")
+    }  
 }
 
 private def TRACE(message) {
