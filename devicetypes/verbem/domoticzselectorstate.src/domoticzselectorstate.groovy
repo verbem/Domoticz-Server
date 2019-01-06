@@ -1,16 +1,9 @@
 /**
  *  domoticzSelector "State" component
  *
- *  Copyright 2017 Martin Verbeek
+ *  Copyright 2019 Martin Verbeek
  *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
+ * 	7.20	Changed the way levels are validated, as the - char will interfere when it is part of statelevel
  *
  */
 metadata {
@@ -42,7 +35,7 @@ def on() {
 
 def buttonPress() {
     def stateLevels = device.displayName.tokenize("-")
-    def stateLevel = stateLevels[stateLevels.size()-1]
+    def stateLevel = (device.displayName - stateLevels[0]).substring(1)
     stateLevels = parent.currentValue("selector").tokenize("|")
     def ix = 0
     def found = 200
@@ -56,6 +49,7 @@ def buttonPress() {
     if (found != 200) {
         parent.setLevel(found)
     }
+    else log.error "State not found "
 }
 
 def installed() {
@@ -71,7 +65,7 @@ def initialize() {
     try {
     if (parent) {
         def stateLevels = device.displayName.tokenize("-")
-    	def stateLevel = stateLevels[stateLevels.size()-1]
+        def stateLevel = (device.displayName - stateLevels[0]).substring(1)
         sendEvent(name: "labelButton", value: stateLevel)
     }
     else {
