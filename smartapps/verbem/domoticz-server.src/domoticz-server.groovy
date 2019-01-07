@@ -3,24 +3,6 @@
  *
  *  Copyright 2018 Martin Verbeek
  *
-    V6.00	Abilty to check oAuth in DZ settings against current oAuth
-    		Restructure of SocketSend routine (only path and callback provided to sendHub)
-            Restructure of UpdateDeviceList routine
-	V6.10	Start with implementing creation of ST real devices as DZ virtual devices
-    		Create Hardware routine, Create Device routine, Create Sensor Routine
-            Setup page with what devicetypes to select
-    V6.11	toInteger check on device return
-    V6.12	hardwareIdx was not set on time for virtual devices creation
-    V6.13	Add lock as a virtual device, fix of null pointer check in ucount
-    V6.14	uninstalled with clearAllNotifications, redo device.Temp check 
-    V6.15	also issue a clear notification for devices that are removed from State.devices
-    		Add setting to delete state/childdevice when not in selected Domoticz Room anymore
-            Add code to delete state/childdevice when not in rooms anymore
-	V6.16	Fix for multipurpose temp/hum/pressure sensors to be recognized for notifications
-    		Do intitial seed of values for virtual devices in DZ from ST when devices are created
-    V6.17	Fix for data flow Thermostat DZ to ST direction, setting of Notifications
-    V6.18	Move Blinds to windowShade capability
-    V6.19	Added call to uCount to capture notifications that are for non-specific devices
     V7.00	Restructured Sensor Component, Thermostat, Motion, OnOff, now very dynamic with adding new capabilities
     V7.01	Push notification when customURL is invalid in Domoticz (access token was changed)
     V7.02	heartbeat to 5 minutes
@@ -40,6 +22,7 @@
     V7.19	Bug fixing
     V7.20	real time update of scene/group status, look if an event has to do with a device that is part of a group/scene and requestr a refresh of the related group/scene
     		also fixed a potential problem with scenes and group unique dni issue. THIS WILL ADD NEW GROUP/SCENE DEVICES...PLEASE DELETE OLD ONES MANUALLY.
+	V7.21	Some enhancements to the setup screens
  */
 
 import groovy.json.*
@@ -62,7 +45,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.20"}
+private def runningVersion() {"7.21"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -82,12 +65,10 @@ preferences {
     page name:"setupDomoticz"
     page name:"setupListDevices"
     page name:"setupDeviceRequest"
-    page name:"setupAddDevices"
     page name:"setupRefreshToken"
     page name:"setupCompositeSensors"
     page name:"setupCompositeSensorsAssignment"
     page name:"setupSmartThingsToDomoticz"
-
 }
 
 /*-----------------------------------------------------------------------------------------*/
@@ -120,14 +101,11 @@ private def setupWelcome() {
 
     def textPara1 =
         "Domoticz Server allows you to integrate Domoticz defined devices into " +
-        "SmartThings. Support for blinds, scenes, groups, on/off/rgb/dimmer, contact, motion, smoke detector devices now. " +
+        "SmartThings. If you miss support for devices open an issue on github " +
         "Please note that it requires a server running " +
         "Domoticz. This must be installed on the local network and accessible from " +
         "the SmartThings hub.\n\n"
      
-
-    def textPara2 = "${app.name}. ${textVersion()}\n${textCopyright()}"
-
     def pageProperties = [
         name        : "setupInit",
         title       : "Welcome!",
@@ -139,7 +117,7 @@ private def setupWelcome() {
     return dynamicPage(pageProperties) {
         section {
             paragraph textPara1
-            paragraph textPara2
+            paragraph "${app.name}. ${textVersion()}\n${textCopyright()}"
         }
     }
 }
@@ -171,22 +149,22 @@ private def setupMenu() {
     
 	return dynamicPage(pageProperties) {
         section {
-            href "setupDomoticz", title:"Configure Domoticz Server", description:"Tap to open"
-            href "setupDeviceRequest", title:"Add all selected Devicetypes or those in selected Rooms", description:"Tap to open"
+            href "setupDomoticz", title:"Configure Domoticz Server", description:"Tap to open", image: "http://www.thermosmart.nl/wp-content/uploads/2015/09/domoticz-450x450.png"
+            href "setupDeviceRequest", title:"Overview of device selection criteria", description:"Tap to open", image: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/Settings.jpg"
         	if (state.devices.size() > 0) {
-                href "setupListDevices", title:"List Installed Devices", description:"Tap to open"
+                href "setupListDevices", title:"List Installed Devices", description:"Tap to open", image: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/Overview.png"
             }
-            href "setupCompositeSensors", title:"Create Composite Devices", description:"Tap to open"	
-            href "setupRefreshToken", title:"Revoke/Recreate Access Token", description:"Tap to open"
-            href "setupSmartThingsToDomoticz", title:"Define SmartThing Devices in Domoticz", description:"Tap to open"
-        }
+            href "setupCompositeSensors", title:"Create Composite Devices", description:"Tap to open", image: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/Composite.png"	
+            href "setupRefreshToken", title:"Revoke/Recreate Access Token", description:"Tap to open", image: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/OAuth2.png"
+            href "setupSmartThingsToDomoticz", title:"Define SmartThing Devices in Domoticz", description:"Tap to open", image: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/SmartThings.jpg"
+        }		
         section([title:"Options", mobileOnly:true]) {
             label title:"Assign a name", required:false
         }
         section("HTTP Custom Action URL for Domoticz") {
             input "domoticzUrl", "text", title: "HTTP Custom Action URL for Domoticz", defaultValue: urlCAH
             href(name: "Domoticz Setup", title: "Domoticz Setup",required: false, style: "external", url: "http://${state.networkId}/#/Setup", description: "Tap to goto Domoticz Setup page")
-            paragraph "Valid setting in Domoticz? : ${state.validUrl}"
+            paragraph "Is the setting currently valid in Domoticz? : ${state.validUrl}"
         }        
         section("About") {
             paragraph "${app.name}. ${textVersion()}\n${textCopyright()}"
@@ -214,23 +192,23 @@ private def setupCompositeSensors() {
         }
         if (state?.listSensors?.size() > 0) {
             section {	
-                state.listSensors.sort().each { key, item ->
+                state.listSensors.sort{it.value.name}.sort{it.value.type}.each { key, item ->
                     def iMap = item as Map
                     if (item.type.matches("domoticzSensor|domoticzMotion|domoticzThermostat|domoticzPowerReport") && state.devices[iMap.idx]) {
                         if (item.type == "domoticzSensor") {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png"               
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"              
                             href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
                         }
                         if (item.type == "domoticzMotion") {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Health & Wellness/health12-icn@2x.png"               
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"         
                             href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
                         }
                         if (item.type == "domoticzThermostat") {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Home/home1-icn@2x.png"               
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"                
                             href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
                         }
                         if (item.type == "domoticzPowerReport" && domoticzReportPower) {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"http://cdn.device-icons.smartthings.com/Appliances/appliances17-icn@2x.png"               
+                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"                
                             href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
                         }
                     }
@@ -238,7 +216,6 @@ private def setupCompositeSensors() {
         	}
       	}
 	}
-
 	addReportDevices()    
     sendThermostatModes()
 }
@@ -399,7 +376,7 @@ private def setupSmartThingsToDomoticz() {
     
     return dynamicPage(pageProperties) {
       section {
-            input "domoticzVirtualDevices", "bool", title: "Define native Smartthings devices as Domoticz Virtuals", defaultValue: false
+            input "domoticzVirtualDevices", "bool", title: "Define native Smartthings devices as Domoticz Virtuals", defaultValue: false, submitOnChange: true
         	}
       if (domoticzVirtualDevices) {
       	section {
@@ -422,18 +399,17 @@ private def setupDeviceRequest() {
     TRACE("[setupDeviceRequest]")
 
     def textHelp =
-        "Add all Domoticz devices that have the following definition: \n\n" +
-        "Type ${domoticzTypes}.\n\n" 
+        "Domoticz devices that have the following characteristics will be added when you SAVE: \n\n" +
+        "Types ${domoticzTypes}.\n\n" 
+        
     if (domoticzRoomPlans) 	textHelp = textHelp + "Devices in Rooms ${domoticzPlans} with the above types \n\n"
-    if (domoticzScene) 		textHelp = textHelp + "Scenes will be added. \n\n"
-    if (domoticzGroup) 		textHelp = textHelp + "Groups will be added. \n\n"
-
-	textHelp = textHelp +  "Tap Next to continue."
+    if (domoticzScene) 		textHelp = textHelp + "Domoticz Scenes will be added. \n\n"
+    if (domoticzGroup) 		textHelp = textHelp + "Domoticz Groups will be added."
           
     def pageProperties = [
         name        : "setupDeviceRequest",
-        title       : "Add Domoticz Devices?",
-        nextPage    : "setupAddDevices",
+        title       : "Add Domoticz Devices",
+        nextPage    : "setupMenu",
         install     : false,
         uninstall   : false
     ]
@@ -441,29 +417,6 @@ private def setupDeviceRequest() {
     return dynamicPage(pageProperties) {
         section {
             paragraph textHelp
-        }
-    }
-}
-/*-----------------------------------------------------------------------------------------*/
-/*		Execute Domoticz LIST devices from the server
-/*-----------------------------------------------------------------------------------------*/
-private def setupAddDevices() {
-    TRACE("[setupAddDevices]")
-
-	refreshDevicesFromDomoticz()
-
-    def pageProperties = [
-        name        : "setupAddDevices",
-        title       : "Adding Devices",
-        nextPage    : "setupMenu",
-        install     : false,
-        uninstall   : false
-    ]
-    
-    return dynamicPage(pageProperties) {
-        section {
-            paragraph "Domoticz Devices are being added to SmartThings"
-            paragraph "Tap Next to continue."
         }
     }
 }
@@ -520,15 +473,12 @@ private def setupListDevices() {
             }
         }
     }
-
-    def switches = getDeviceListAsText('switch')
-    def sensors = getDeviceListAsText('sensor')
-    def thermostats = getDeviceListAsText('thermostat')
+	def uniqueList = state.devices.findAll{key, item -> item.containsKey("deviceType") == true}.collect{it.value.deviceType}.unique().sort()
     
     return dynamicPage(pageProperties) {
-        section("Switch types") {paragraph switches}     
-        section("Sensors") {paragraph sensors}
-        section("Thermostats") {paragraph thermostats}
+    	uniqueList.each { deviceType ->
+        	section(deviceType) {paragraph getDeviceListAsText(deviceType), image: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${deviceType}.png"}
+        }
     }
 }
 
@@ -1120,6 +1070,7 @@ private def callbackForDevices(statusrsp) {
     def dev
     def idxST = 9999999
     def updateEvents = false
+      
     if (statusrsp.result.size() == 1) updateEvents = true
     
     if (state?.dzHardwareIdx) idxST = state.dzHardwareIdx.toInteger() 
@@ -1132,14 +1083,14 @@ private def callbackForDevices(statusrsp) {
             compareTypeVal = device?.SwitchTypeVal
 
             // handle SwitchTypeVal Exceptions
-            if (device?.Type.contains("Temp")) compareTypeVal = 99
-            if (device?.SetPoint) compareTypeVal = 98
-            if (device?.Type == "Humidity") compareTypeVal = 97
-            if (device?.Type == "Air Quality") compareTypeVal = 96
-            if (device?.SubType == "Sound Level") compareTypeVal = 95
-            
             if (compareTypeVal == null) compareTypeVal = 100
-			
+            else if (device?.Type.contains("Temp")) compareTypeVal = 99
+            else if (device?.Type == "Humidity") compareTypeVal = 97
+            else if (device?.Type == "Air Quality") compareTypeVal = 96
+            else if (device?.SubType == "Sound Level") compareTypeVal = 95
+            
+            if (device?.SetPoint) compareTypeVal = 98
+            
             // REAL SmartThings devices that where defined in Domoticz as virtual devices
             if (settings?.domoticzVirtualDevices == true && device?.HardwareID == idxST) {
   
@@ -2016,27 +1967,14 @@ private def addReportDevices() {
         }
     }
 }
- 
-private def getDeviceListAsText(type) {
+private def getDeviceListAsText(deviceType) {
     String s = ""
     
-    state.devices.sort().each { k,v ->
-    	if (type == "thermostat") {
-            if (v.deviceType == "domoticzThermostat") {
-                def dev = getChildDevice(v.dni)           
-                if (!dev) TRACE("[getDeviceListAsText] ${v.dni} NOT FOUND")
-                s += "${k.padLeft(4)} - ${dev?.displayName} - ${v.deviceType}\n"
-        	}
-        }
-        else {
-            if (v.type == type) {
-                def dev = getChildDevice(v.dni)           
-                if (!dev) TRACE("[getDeviceListAsText] ${v.dni} NOT FOUND")
-                s += "${k.padLeft(4)} - ${dev?.displayName} - ${v.deviceType}\n"
-            }          	
-        }    
-    }
-
+    state.devices.findAll{it.value.deviceType == deviceType}.sort().each { k,v ->
+        def dev = getChildDevice(v.dni)           
+        if (!dev) TRACE("[getDeviceListAsText] ${v.dni} NOT FOUND")
+        s += "${k.padLeft(4)} - ${dev?.displayName} \n"       	
+    }    
     return s
 } 
 
@@ -2408,7 +2346,6 @@ void devicesOnline() {
         }        
     }
     state.devicesOffline = false
-    pause 2
 }
 
 void devicesOffline() {
@@ -2422,8 +2359,6 @@ void devicesOffline() {
         dev.sendEvent(name: "DeviceWatch-DeviceStatus", value: "offline", displayed: false, isStateChange: true)
     }
     state.devicesOffline = true
-    pause 2
-
 }
 
 /*-----------------------------------------------------------------------------------------*/
@@ -2639,7 +2574,7 @@ private String convertHexToIP(hex) {
 }
 
 private def textCopyright() {
-    return "Copyright (c) 2018 Martin Verbeek"
+    return "Copyright (c) 2019 Martin Verbeek"
 }
 
 private def idxSettings(type) {
