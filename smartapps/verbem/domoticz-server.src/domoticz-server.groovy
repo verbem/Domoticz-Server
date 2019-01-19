@@ -23,6 +23,7 @@
     V7.20	real time update of scene/group status, look if an event has to do with a device that is part of a group/scene and requestr a refresh of the related group/scene
     		also fixed a potential problem with scenes and group unique dni issue. THIS WILL ADD NEW GROUP/SCENE DEVICES...PLEASE DELETE OLD ONES MANUALLY.
 	V7.21	Some enhancements to the setup screens
+    V7.22	Supports creating power meter vitual devices in Domoticz from SmartThings devices
  */
 
 import groovy.json.*
@@ -126,6 +127,8 @@ private def setupWelcome() {
 /*-----------------------------------------------------------------------------------------*/
 private def setupMenu() {
     TRACE("[setupMenu]")
+   
+    
     def urlCAH
     if (state.accessToken) {
 		state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
@@ -388,6 +391,7 @@ private def setupSmartThingsToDomoticz() {
       		input "dzSensorsTemp", "capability.temperatureMeasurement", title:"Select Temperature sensors", multiple:true, required:false
       		input "dzSensorsHum", "capability.relativeHumidityMeasurement", title:"Select Humidity sensors", multiple:true, required:false
       		input "dzSensorsIll", "capability.illuminanceMeasurement", title:"Select Illuminance sensors", multiple:true, required:false
+            input "dzPowerMeters", "capability.powerMeter", title:"Select power meters", multiple:true, required:false
         }
       }
     }
@@ -561,6 +565,7 @@ private def initialize() {
         if (dzSensorsTemp) subscribe(dzSensorsTemp, "temperature", handlerEvents)
         if (dzSensorsHum) subscribe(dzSensorsHum, "humidity", handlerEvents)
         if (dzSensorsIll) subscribe(dzSensorsIll, "illuminance", handlerEvents)
+        if (dzPowerMeters) subscribe(dzPowerMeters, "power", handlerEvents)
         
         runIn(10, defineSmartThingsInDomoticz) 
 
@@ -782,6 +787,16 @@ void defineSmartThingsInDomoticz() {
             }
         }
     }
+    // POWER METERS
+    dzPowerMeters.each { dev ->
+        if (dev.deviceNetworkId.contains("IDX") == false) {
+        	TRACE("Trying to create a power meter...")
+            if (getVirtualIdx([name: dev.displayName, type: "power"]) == null) {
+            	TRACE("Power meter creation for (${dev.displayName})")
+                socketSend([request:"CreateVirtualCustomDevice", deviceName:dev.displayName.replaceAll(" ", "%20"), deviceType:243, deviceSubType:29])
+            }
+        }
+    }
 }
 /*-----------------------------------------------------------------------------------------*/
 /*		Update the usage info in virtual domoticz devices that have been selected by user to sync to DZ
@@ -802,7 +817,8 @@ void handlerEvents(evt) {
 	def idx = getVirtualIdx([name:dev.displayName, type: evt.name])
     
     if (idx) {   
-    	//TRACE("${evt.name} ${evt.stringValue} for ${dev.displayName} idx ${idx}")
+    	//TRACE("Sending device updates to Domoticz... current event = ${evt.name}, eventname = ${evt.stringValue}, device = ${dev.displayName}")
+    	//TRACE("${evt.name} ${evt.stringValue} for ${dev.displayName} idx ${idx}") // comment this out for prod
         switch (evt.name) {
         case "switch":
             socketSend([request: evt.stringValue, idx: idx])
@@ -825,6 +841,11 @@ void handlerEvents(evt) {
         case "illuminance":
         	socketSend([request: "SetLux", idx: idx, lux:evt.stringValue])
             break
+        case "power":
+            //TRACE("Trying to update Domoticz Power Meter with some data...")
+            //TRACE("${evt.name} ${evt.stringValue} for ${dev.displayName} idx ${idx}")
+            socketSend([request: "SetPower", idx: idx, power:evt.stringValue, energy:"0"])
+        	break
         default:
             break
         }
@@ -833,8 +854,21 @@ void handlerEvents(evt) {
 
 private def getVirtualIdx(passed) {
 	if (!settings?.domoticzVirtualDevices) return
+    
+    // Temporary - iterate the whole virtualDevices map and list for debugging purposes
+    // TRACE("Listing known virtualDevices")
+    // state?.virtualDevices.each { key, item ->
+    //	TRACE("Dumping... Key: ${key} Item: ${item}")
+	// }
 
     def virtual = state?.virtualDevices.find {key, item -> item.name.toUpperCase() == passed.name.toUpperCase() && item.type.toUpperCase() == passed.type.toUpperCase() }
+       
+    if( virtual) {
+    	TRACE("getVirtualIdx: found ${passed.name} = '${virtual.key}'")
+    }
+    else {
+    	TRACE("getVirtualIdx: nothing found for ${passed.name}")
+    }
   
     if (virtual) return virtual.key   
 }
@@ -1081,6 +1115,8 @@ private def callbackForDevices(statusrsp) {
 	statusrsp.result.each { device ->
     	if (device?.Used == 1) {						// Only devices that are defined as being USED in DZ will make it as real devices
             compareTypeVal = device?.SwitchTypeVal
+            
+            //TRACE("Output Device Type: ${device?.Type}, SubType: ${device?.SubType}")
 
             // handle SwitchTypeVal Exceptions
             if (compareTypeVal == null) compareTypeVal = 100
@@ -1088,6 +1124,7 @@ private def callbackForDevices(statusrsp) {
             else if (device?.Type == "Humidity") compareTypeVal = 97
             else if (device?.Type == "Air Quality") compareTypeVal = 96
             else if (device?.SubType == "Sound Level") compareTypeVal = 95
+            else if (device?.SubType == "kWh") compareTypeVal = 29
             
             if (device?.SetPoint) compareTypeVal = 98
             
@@ -1118,6 +1155,10 @@ private def callbackForDevices(statusrsp) {
                     case 8:
                         SubType = "motion"
                         dev = settings.dzSensorsMotion.find{it.displayName == device.Name}
+                        break
+					case 29:
+                        SubType = "power"
+                        dev = settings.dzPowerMeters.find{it.displayName == device.Name}
                         break
                     case 97:
                         SubType = "humidity"
@@ -2201,6 +2242,9 @@ private def socketSend(passed) {
          case "SetHumidity":  
          	hubPath = "/json.htm?type=command&param=udevice&idx=${passed.idx}&svalue=0&nvalue=${passed.humidity}"
             break;
+         case "SetPower":  
+         	hubPath = "/json.htm?type=command&param=udevice&idx=${passed.idx}&nvalue=0&svalue=${passed.power};${passed.energy}"
+            break;
          case "Notification": 
          	def tWhen = 0
             def tValue = 0
@@ -2255,7 +2299,12 @@ private def socketSend(passed) {
 		case "CreateVirtualSensor":  
             hubPath = "/json.htm?type=createvirtualsensor&idx=${state.dzHardwareIdx}&sensorname=${passed.deviceName}&sensortype=${passed.sensorType}"
             hubCallback = [callback: callbackVirtualDevices]
-            break;        
+            break;
+        case "CreateVirtualCustomDevice":  
+        	hubPath = "/json.htm?type=createdevice&idx=${state.dzHardwareIdx}&sensorname=${passed.deviceName}&devicetype=${passed.deviceType}&devicesubtype=${passed.deviceSubType}"
+        	TRACE("Creating Power Meter in Domoticz")
+        	hubCallback = [callback: callbackVirtualDevices]
+        	break; 
         default:
         	return
             break;           
