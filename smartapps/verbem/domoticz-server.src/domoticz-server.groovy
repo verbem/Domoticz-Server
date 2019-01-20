@@ -23,7 +23,8 @@
     V7.20	real time update of scene/group status, look if an event has to do with a device that is part of a group/scene and requestr a refresh of the related group/scene
     		also fixed a potential problem with scenes and group unique dni issue. THIS WILL ADD NEW GROUP/SCENE DEVICES...PLEASE DELETE OLD ONES MANUALLY.
 	V7.21	Some enhancements to the setup screens
-    V7.22	Supports creating power meter vitual devices in Domoticz from SmartThings devices
+    V7.22	SetPower for power/energy virtual devices defined in Domoticz
+    V7.23	Testing with getUrl for websettings/storesettings form, looks good
  */
 
 import groovy.json.*
@@ -38,7 +39,7 @@ definition(
     author: "Martin Verbeek",
     description: "Connects to local Domoticz server and define Domoticz devices in ST",
     category: "My Apps",
-    singleInstance: true,
+    singleInstance: false,
     oauth: true,
     iconUrl: "http://www.thermosmart.nl/wp-content/uploads/2015/09/domoticz-450x450.png",
     iconX2Url: "http://www.thermosmart.nl/wp-content/uploads/2015/09/domoticz-450x450.png",
@@ -46,7 +47,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.21"}
+private def runningVersion() {"7.23"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -105,7 +106,7 @@ private def setupWelcome() {
         "SmartThings. If you miss support for devices open an issue on github " +
         "Please note that it requires a server running " +
         "Domoticz. This must be installed on the local network and accessible from " +
-        "the SmartThings hub.\n\n"
+        "the SmartThings hub. The local network must be WHITELISTED in the Domoticz settings!\n\n"
      
     def pageProperties = [
         name        : "setupInit",
@@ -127,8 +128,6 @@ private def setupWelcome() {
 /*-----------------------------------------------------------------------------------------*/
 private def setupMenu() {
     TRACE("[setupMenu]")
-   
-    
     def urlCAH
     if (state.accessToken) {
 		state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
@@ -163,12 +162,7 @@ private def setupMenu() {
         }		
         section([title:"Options", mobileOnly:true]) {
             label title:"Assign a name", required:false
-        }
-        section("HTTP Custom Action URL for Domoticz") {
-            input "domoticzUrl", "text", title: "HTTP Custom Action URL for Domoticz", defaultValue: urlCAH
-            href(name: "Domoticz Setup", title: "Domoticz Setup",required: false, style: "external", url: "http://${state.networkId}/#/Setup", description: "Tap to goto Domoticz Setup page")
-            paragraph "Is the setting currently valid in Domoticz? : ${state.validUrl}"
-        }        
+        }      
         section("About") {
             paragraph "${app.name}. ${textVersion()}\n${textCopyright()}"
         }
@@ -193,27 +187,13 @@ private def setupCompositeSensors() {
 		section {
         	input "domoticzReportPower", "bool", title: "Create Utility Report device(s)", submitOnChange: true, defaultValue: false 
         }
-        if (state?.listSensors?.size() > 0) {
-            section {	
-                state.listSensors.sort{it.value.name}.sort{it.value.type}.each { key, item ->
+        if (state?.devices.size() > 0) {
+            section {
+            	paragraph "Add Components to devices"
+                state.devices.findAll{it.value.deviceType.matches("domoticzSensor|domoticzMotion|domoticzThermostat|domoticzPowerReport")}.sort{it.value.name}.sort{it.value.deviceType}.each { key, item ->
                     def iMap = item as Map
-                    if (item.type.matches("domoticzSensor|domoticzMotion|domoticzThermostat|domoticzPowerReport") && state.devices[iMap.idx]) {
-                        if (item.type == "domoticzSensor") {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"              
-                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                        }
-                        if (item.type == "domoticzMotion") {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"         
-                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                        }
-                        if (item.type == "domoticzThermostat") {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"                
-                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                        }
-                        if (item.type == "domoticzPowerReport" && domoticzReportPower) {
-                            paragraph "Extend ${iMap.type.toUpperCase()}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.type}.png"                
-                            href "setupCompositeSensorsAssignment", title:"Add capabilities", description:"Tap to open", params: iMap
-                        }
+                    if (item.deviceType.matches("domoticzSensor|domoticzMotion|domoticzThermostat") || (item.deviceType == "domoticzPowerReport" && domoticzReportPower)) {
+                        href "setupCompositeSensorsAssignment",  params: iMap , description:" ", title:"${iMap.deviceType - "domoticz"}\n${iMap.name}", image:"https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/domoticz-server.src/${item.deviceType}.png"
                     }
                 }
         	}
@@ -235,7 +215,7 @@ private def setupCompositeSensorsAssignment(iMap) {
     ]
     
     return dynamicPage(pageProperties) {
-    	if (iMap.type == "domoticzSensor") {
+    	if (iMap.deviceType == "domoticzSensor") {
             section {           
                 paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather12-icn@2x.png", "Relative Humidity Measurement"
                 input "idxHumidity[${iMap.idx}]", "enum", options: state.optionsHumidity, required: false   
@@ -263,7 +243,7 @@ private def setupCompositeSensorsAssignment(iMap) {
 
             }
     	}
-    	if (iMap.type == "domoticzThermostat") {
+    	if (iMap.deviceType == "domoticzThermostat") {
             section {           
                 paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png", "Temperature Measurement"
                 input "idxTemperature[${iMap.idx}]", "enum", options: state.optionsTemperature, required: false 
@@ -290,7 +270,7 @@ private def setupCompositeSensorsAssignment(iMap) {
                 input "idxCustom2[${iMap.idx}]", "enum", options: state.optionsCustom, required: false 
             }
     	}
-    	if (iMap.type == "domoticzMotion") {
+    	if (iMap.deviceType == "domoticzMotion") {
             section {           
                 paragraph image:"http://cdn.device-icons.smartthings.com/Weather/weather2-icn@2x.png", "Temperature Measurement"
                 input "idxTemperature[${iMap.idx}]", "enum", options: state.optionsTemperature, required: false 
@@ -311,7 +291,7 @@ private def setupCompositeSensorsAssignment(iMap) {
                 input "idxCustom2[${iMap.idx}]", "enum", options: state.optionsCustom, required: false 
             }
     	}
-    	if (domoticzReportPower == true && iMap.type == "domoticzPowerReport") {
+    	if (domoticzReportPower == true && iMap.deviceType == "domoticzPowerReport") {
             section {           
                 paragraph image:"http://cdn.device-icons.smartthings.com/Appliances/appliances17-icn@2x.png", "Power Meter"
                 input "idxPower[${iMap.idx}]", "enum", options: state.optionsPower, required: false
@@ -354,14 +334,13 @@ private def setupDomoticz() {
             input "domoticzTypes","enum", title: "Devicetypes you want to add", options: ["Contact Sensors", "Dusk Sensors", "Motion Sensors", "On/Off/Dimmers/RGB", "Smoke Detectors", "Thermostats", "(Virtual) Sensors", "Window Coverings"], multiple: true
             if (settings.containsKey('domoticzIpAddress') && settings?.domoticzIpAddress != "0.0.0.0") input "domoticzRoomPlans", "bool", title: "Support Room Plans from Domoticz?", submitOnChange: true, defaultValue: false
             if (domoticzRoomPlans && settings.containsKey('domoticzIpAddress')) input "domoticzPlans","enum", title: "Select the rooms", options: state.listPlans, submitOnChange : true, multiple: true
-            if (domoticzPlans) input "domoticzDDIP", "bool", title: "Remove devices from App not related to a Roomplan anymore?", defaultValue: false
+            if (domoticzPlans) input "domoticzDDIP", "bool", title: "Only keep devices related to a Roomplan?", defaultValue: false
             input "domoticzGroup","bool", title: "Add Groups from Domoticz?", defaultValue: false
             input "domoticzScene", "bool", title: "Add Scenes from Domoticz?", defaultValue: false
             input "domoticzTrace", "bool", title: "Debug trace output in IDE log", defaultValue: true
         	}
     }
 }
-
 
 /*-----------------------------------------------------------------------------------------*/
 /*		SET Up Configure Domoticz PAGE
@@ -435,7 +414,7 @@ private def setupRefreshToken() {
     def token = createAccessToken()
     
     state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
-
+	socketSend([request: "Settings"])
     def pageProperties = [
         name        : "setupRefreshToken",
         title       : "Refresh the access Token",
@@ -499,6 +478,7 @@ def updated() {
 def uninstalled() {
     TRACE("[uninstalled]")
     unschedule()
+    unsubscribe()
 	// delete ST HARDWARE in DZ
     if (settings?.domoticzVirtualDevices == true) socketSend([request:"DeleteHardware"])
 	// clear custom notifications in DZ
@@ -547,6 +527,8 @@ private def initialize() {
 
 	addReportDevices()
     assignSensorToDevice()
+    
+    if (state.containsKey("listSensors")) state.remove("listSensors")
     
     if (settings?.domoticzVirtualDevices == true) {
     	if (state.dzHardwareIdx == null) {
@@ -598,31 +580,24 @@ return
     	idx = scene.deviceNetworkId.split(":")[2]
         idx = app.id + ":IDX:" + idx 
         log.info idx
-    	//scene.deviceNetworkId = 
     }
-
-    
+   
 	pause 5
 }
 
 private def clearAllNotifications() {
 	state.devices.each {key, item ->
-		if (item.type == "switch") {
-        	TRACE("[clearAllNotifications] Clear Notifications for Devices ${item.type} ${item.dni} idx ${item.idx}")
-        	socketSend([request : "ClearNotification", idx : item.idx])
-            pause 2
-        }
+        TRACE("[clearAllNotifications] Clear Notifications for Devices ${item.type} ${item.dni} idx ${item.idx}")
+        socketSend([request : "ClearNotification", idx : item.idx])
     }
 
 	def options = state.findAll { key, value -> key.startsWith("options") }
     options.each { key, sensor ->
     	sensor.each { idx, content ->
         	TRACE("[clearAllNotifications] Clear Notifications for Sensor ${content} idx ${idx}")
-        	socketSend([request : "ClearNotification", idx : idx])
-            pause 2        
+        	socketSend([request : "ClearNotification", idx : idx])       
         }
-    }
-    
+    }    
 }
 
 private def assignSensorToDevice() {
@@ -790,7 +765,6 @@ void defineSmartThingsInDomoticz() {
     // POWER METERS
     dzPowerMeters.each { dev ->
         if (dev.deviceNetworkId.contains("IDX") == false) {
-        	TRACE("Trying to create a power meter...")
             if (getVirtualIdx([name: dev.displayName, type: "power"]) == null) {
             	TRACE("Power meter creation for (${dev.displayName})")
                 socketSend([request:"CreateVirtualCustomDevice", deviceName:dev.displayName.replaceAll(" ", "%20"), deviceType:243, deviceSubType:29])
@@ -817,8 +791,6 @@ void handlerEvents(evt) {
 	def idx = getVirtualIdx([name:dev.displayName, type: evt.name])
     
     if (idx) {   
-    	//TRACE("Sending device updates to Domoticz... current event = ${evt.name}, eventname = ${evt.stringValue}, device = ${dev.displayName}")
-    	//TRACE("${evt.name} ${evt.stringValue} for ${dev.displayName} idx ${idx}") // comment this out for prod
         switch (evt.name) {
         case "switch":
             socketSend([request: evt.stringValue, idx: idx])
@@ -842,9 +814,9 @@ void handlerEvents(evt) {
         	socketSend([request: "SetLux", idx: idx, lux:evt.stringValue])
             break
         case "power":
-            //TRACE("Trying to update Domoticz Power Meter with some data...")
-            //TRACE("${evt.name} ${evt.stringValue} for ${dev.displayName} idx ${idx}")
-            socketSend([request: "SetPower", idx: idx, power:evt.stringValue, energy:"0"])
+        	def energy = "0"
+        	if (dev.currentValue("energyMeter")) energy = dev.currentValue("energyMeter").toString()
+            socketSend([request: "SetPower", idx: idx, power:evt.stringValue, energy:energy])
         	break
         default:
             break
@@ -854,21 +826,8 @@ void handlerEvents(evt) {
 
 private def getVirtualIdx(passed) {
 	if (!settings?.domoticzVirtualDevices) return
-    
-    // Temporary - iterate the whole virtualDevices map and list for debugging purposes
-    // TRACE("Listing known virtualDevices")
-    // state?.virtualDevices.each { key, item ->
-    //	TRACE("Dumping... Key: ${key} Item: ${item}")
-	// }
 
     def virtual = state?.virtualDevices.find {key, item -> item.name.toUpperCase() == passed.name.toUpperCase() && item.type.toUpperCase() == passed.type.toUpperCase() }
-       
-    if( virtual) {
-    	TRACE("getVirtualIdx: found ${passed.name} = '${virtual.key}'")
-    }
-    else {
-    	TRACE("getVirtualIdx: nothing found for ${passed.name}")
-    }
   
     if (virtual) return virtual.key   
 }
@@ -899,7 +858,6 @@ void callbackForUCount(evt) {
             if (utility.Status.toUpperCase() == "ON") motion = "active"
             
             doUtilityEvent([idx: utility.idx, idxName: "idxMotion", name:"motion", value:"${motion}"])
-
         }
         // Gas
     	if (utility?.SubType == "Gas") {
@@ -1016,11 +974,7 @@ void callbackForRoom(evt) {
 
     TRACE("[callbackForRoom] Domoticz response with Title : ${response.title} number of items returned ${response.result.size()}") 
 
-    response.result.each {
-		if (it?.SubType != "kWh") {
-            state.listOfRoomPlanDevices.add(it.devidx)
-        }
-    }
+    response.result.findAll{it?.SubType != "kWh"}.each { state.listOfRoomPlanDevices.add(it.devidx) }
 }
 /*-----------------------------------------------------------------------------------------*/
 /*		Get Room Plans defined into Selectables for setupDomoticz
@@ -1033,7 +987,6 @@ void callbackForPlans(evt) {
     
     state.statusPlansRsp = response.result
     state.listPlans = response.result.collect{it.Name}.sort()
-
 }
 /*-----------------------------------------------------------------------------------------*/
 /*		proces for adding and updating status for Scenes and Groups
@@ -1043,10 +996,9 @@ void callbackForScenesUpdate(evt) {
 	if (response?.result == null) return
 
     TRACE("[callbackForScenesUpdate] Domoticz response with Title : ${response.title} number of items returned ${response.result.size()}") 
-	response?.result.each {
-    	if ((it.Type == "Scene" && domoticzScene) || (it.Type == "Group" && domoticzGroup)) {
-        	defineDomoticzInSmartThings([idx:"S${it.idx}", deviceType: "domoticzScene", subType: it.Type, name: it.Name, dzStatus: it, updateEvents:true])
-        }
+    
+	response?.result.findAll{(it.Type == "Scene" && domoticzScene) || (it.Type == "Group" && domoticzGroup)}.each { 
+    	defineDomoticzInSmartThings([idx:"S${it.idx}", deviceType: "domoticzScene", subType: it.Type, name: it.Name, dzStatus: it, updateEvents:true])
     }
 }
 /*-----------------------------------------------------------------------------------------*/
@@ -1062,10 +1014,8 @@ void callbackForScenes(evt) {
 
     TRACE("[callbackForScenes] Domoticz response with Title : ${response.title} number of items returned ${response.result.size()}") 
 
-	response?.result.each {
-    	if ((it.Type == "Scene" && domoticzScene) || (it.Type == "Group" && domoticzGroup)) {  
-        	defineDomoticzInSmartThings([idx:"S${it.idx}", deviceType: "domoticzScene", subType: it.Type, name: it.Name, dzStatus: it, updateEvents:true])
-        }
+	response?.result.findAll{(it.Type == "Scene" && domoticzScene) || (it.Type == "Group" && domoticzGroup)}.each {
+        defineDomoticzInSmartThings([idx:"S${it.idx}", deviceType: "domoticzScene", subType: it.Type, name: it.Name, dzStatus: it, updateEvents:true])
     }
 	state.sceneGroupDevices = [:]   
     //kick off the first of the callback sequence to fill a correct map with info in the right order.
@@ -1109,14 +1059,11 @@ private def callbackForDevices(statusrsp) {
     
     if (state?.dzHardwareIdx) idxST = state.dzHardwareIdx.toInteger() 
     
-	if (!state.listSensors) state.listSensors = [:]
     if (!state.virtualDevices) state.virtualDevices = [:]
     
 	statusrsp.result.each { device ->
     	if (device?.Used == 1) {						// Only devices that are defined as being USED in DZ will make it as real devices
             compareTypeVal = device?.SwitchTypeVal
-            
-            //TRACE("Output Device Type: ${device?.Type}, SubType: ${device?.SubType}")
 
             // handle SwitchTypeVal Exceptions
             if (compareTypeVal == null) compareTypeVal = 100
@@ -1192,30 +1139,24 @@ private def callbackForDevices(statusrsp) {
                         break
                     case [2, 11]:				//	Contact 
                         if (domoticzTypes.contains('Contact Sensors')) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzContact", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
-                        if (!state.listSensors[device.idx]) state.listSensors[device.idx] = [name: device.Name, idx: device.idx, type: "domoticzContact"]
                         break
                     case 5:				//	Smoke Detector
                         if (domoticzTypes.contains('Smoke Detectors')) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzSmokeDetector", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
-                        if (!state.listSensors[device.idx]) state.listSensors[device.idx] = [name: device.Name, idx: device.idx, type: "domoticzSmokeDetector"]
                         break
                     case 8:				//	Motion Sensors
                         if (domoticzTypes.contains('Motion Sensors')) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzMotion", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
-                        if (!state.listSensors[device.idx]) state.listSensors[device.idx] = [name: device.Name, idx: device.idx, type: "domoticzMotion"]
                         break
                     case 12:			//	Dusk Sensors/Switch
                         if (domoticzTypes.contains('Dusk Sensors')) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzDuskSensor", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
-                        if (!state.listSensors[device.idx]) state.listSensors[device.idx] = [name: device.Name, idx: device.idx, type: "domoticzDuskSensor"]
                         break
                     case 18:			//	Selector Switch
                         if (domoticzTypes.contains("On/Off/Dimmers/RGB")) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzSelector", name:device.Name, subType: device.SwitchType, dzStatus: device, updateEvents: updateEvents)
                         break
                     case 98:			//	Thermostats
                         if (domoticzTypes.contains("Thermostats")) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzThermostat", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
-                        if (!state.listSensors[device.idx]) state.listSensors[device.idx] = [name: device.Name, idx: device.idx, type: "domoticzThermostat"]
                        break
                     case 99:			//	Sensors
                         if (domoticzTypes.contains("(Virtual) Sensors")) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzSensor", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
-                        if (!state.listSensors[device.idx]) state.listSensors[device.idx] = [name: device.Name, idx: device.idx, type: "domoticzSensor"]
                         break
                     case 100:
                         break
@@ -1230,7 +1171,7 @@ private def callbackForDevices(statusrsp) {
 
 /*-----------------------------------------------------------------------------------------*/
 /*		callback for updating usage counters and reporting in SmartThings
-/*		it will also do some linking between individual domoticz devices into a single SmartThings device
+/*		it will also do linking between individual domoticz devices into a single SmartThings device
 /*-----------------------------------------------------------------------------------------*/
 def callbackForEveryThing(evt) {
     def response = getResponse(evt)
@@ -1250,7 +1191,7 @@ def callbackForEveryThing(evt) {
     def stateGas = state?.devices["10001"]
     def devReportPower
     def devReportGas
-   
+
     response.result.each {
 		//TEMP		    	        
         if (it?.Type.contains("Temp")) {
@@ -1292,7 +1233,6 @@ def callbackForEveryThing(evt) {
         //CUSTOM
         if (it?.Type == "General") {
         	state.optionsCustom[it.idx] = "${it.idx} : ${it.Name}"
-            //if (it.Notifications == "false") socketSend([request : "SensorSoundNotification", idx : it.idx])
             def dataDisplayed = "${it.Name} :\n${it.Data}"
         	doUtilityEvent([idx: it.idx, idxName: "idxCustom1", name:"customStatus1", value:dataDisplayed])
         	doUtilityEvent([idx: it.idx, idxName: "idxCustom2", name:"customStatus2", value:dataDisplayed])
@@ -1308,18 +1248,25 @@ def callbackForEveryThing(evt) {
             if (it.Notifications == "false") socketSend([request : "SensorPressureNotification", idx : it.idx])
         } 
         //USAGE ENERGY (P1 meters)
-        if (it?.SubType == "Energy") {
+        if (it?.Type == "P1 Smart Meter" && it?.SubType == "Energy") {
         	state.optionsPower[it.idx] = "${it.idx} : ${it.Name}"
         	if (it.Notifications == "false") socketSend([request : "SensorKWHNotification", idx : it.idx])	
-    		if (statePower?.idxPower == it.idx) {
+    		if (settings.domoticzReportPower && statePower?.idxPower == it.idx) {
                 devReportPower = getChildDevice(state.devReportPower)
                 if (devReportPower) {
                 	powerUnit = it.CounterToday.split()[1]
                 	powerUsage = it.Usage.split()[1]
+                    def consumptionLow = it.Data.split(";")[0]
+                    def consumptionHigh = it.Data.split(";")[1]
+                    def productionLow = it.Data.split(";")[2]
+                    def productionHigh = it.Data.split(";")[3]
+                    def momentaryUsage = it.Data.split(";")[4]
+                    def momentaryProduction = it.Data.split(";")[5]
                     devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
-                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${it.Data} Today:${it.CounterToday}"))
-                }            	
+                    //devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total Low:${consumptionLow}\nTotal High:${consumptionHigh}\nProduction Low:${productionLow}\nProduction High:${productionHigh}\nMomentary Usage:${momentaryUsage}\nMomentary Production:${momentaryProduction}\nToday:${it.CounterToday}"))
+					devReportPower.sendEvent(name:"powerTotal", value: "Total Low:${consumptionLow}W\nTotal High:${consumptionHigh}W\nProduction Low:${productionLow}W\nProduction High:${productionHigh}W\nMomentary Usage:${momentaryUsage}W\nMomentary Production:${momentaryProduction}W\nToday:${it.CounterToday}")
+				}            	
             }
         }
         //USAGE POWER
@@ -1328,12 +1275,12 @@ def callbackForEveryThing(evt) {
             if (it.Notifications == "false") socketSend([request : "SensorKWHNotification", idx : it.idx])            
             kwh = kwh + Float.parseFloat(it.Data.split()[0])
             watt = watt + Float.parseFloat(it.Usage.split()[0])
-			powerUnit = it.Data.split()[1]
-            powerUsage = it.Usage.split()[1]
             
-    		if (statePower?.idxPower == it.idx) {
+    		if (settings.domoticzReportPower && statePower?.idxPower == it.idx) {
                 devReportPower = getChildDevice(state.devReportPower)
                 if (devReportPower) {
+                    powerUnit = it.Data.split()[1]
+            		powerUsage = it.Usage.split()[1]
                 	def k = it.Data.split()[0].toDouble().round(0)
                     def w = it.Usage.split()[0].toDouble().round(0)
                     devReportPower.sendEvent(name:"energyMeter", value: "${k}", unit:powerUnit)
@@ -1368,42 +1315,51 @@ def callbackForEveryThing(evt) {
 			if (it.Notifications == "false") socketSend([request : "SensorGasNotification", idx : it.idx])
             gasTotal = gasTotal + Float.parseFloat(it.Counter)
             gasUsage = gasUsage + Float.parseFloat(it.CounterToday.split()[0])
-            gasUnit = it.CounterToday.split()[1]
-    		if (stateGas?.idxGas == it.idx) {
-                devReportGas = getChildDevice(state.devReportGas)
+
+			if (settings.domoticzReportPower && stateGas?.idxGas == it.idx) {
+                gasUnit = it.CounterToday.split()[1]
+            	devReportGas = getChildDevice(state.devReportGas)
                 if (devReportGas) {
                     devReportGas.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(3)}", unit:gasUnit)
-                    devReportGas.sendEvent(name:"power", value: it.CounterToday.split()[0].toDouble().round(3), unit:gasUnit)
+                    def m = devReportGas?.currentValue("power")
+                    if (!m) m = 0
+                    m = m.toDouble()
+                    m = it.CounterToday.split()[0].toDouble() - m
+                    devReportGas.sendEvent(name:"power", value: m.round(3), unit:gasUnit)
                     devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total:${it.Data} Today:${it.CounterToday}"))
 
                 }            	
             }
 		}
 	}
-    
-	// pass to Devices that report Usage totals but only if report device does not contain idxPower or idxGas key
-    if (statePower?.containsKey("idxPower") == false) { 
-        if (kwh > 0 && state.devReportPower != null) {
-            devReportPower = getChildDevice(state.devReportPower)
-            if (devReportPower) {
-                devReportPower.sendEvent(name:"energyMeter", value: "${kwh.round(0)}", unit:powerUnit)
-                devReportPower.sendEvent(name:"power", value: watt.round(0), unit:powerUsage)
-                devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("no data"))
+
+	if (settings.domoticzReportPower) {
+        // pass to Devices that report Usage totals but only if report device does not contain idxPower or idxGas key
+        if (statePower?.containsKey("idxPower") == false) { 
+            if (kwh > 0 && state.devReportPower != null) {
+                devReportPower = getChildDevice(state.devReportPower)
+                if (devReportPower) {
+                    devReportPower.sendEvent(name:"energyMeter", value: "${kwh.round(0)}", unit:powerUnit)
+                    devReportPower.sendEvent(name:"power", value: watt.round(0), unit:powerUsage)
+                    devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("no data"))
+                }
             }
         }
+        else TRACE("[callbackForEveryThing] Total usage sensor connected to Power Reporting Device")
+        if (stateGas?.containsKey("idxGas") == false) { 
+            if (gasUsage > 0 && state.devReportGas != null) {
+                devReportGas = getChildDevice(state.devReportGas)
+                if (devReportGas) {
+                    devReportGas.sendEvent(name:"energyMeter", value: "${gasTotal.round(3)}", unit:gasUnit)
+                    def m = devReportGas?.currentValue("power").toDouble()
+                    m = gasUsage.toDouble() - m
+                    devReportGas.sendEvent(name:"power", value: m.round(3), unit:gasUnit)
+                    devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("no data"))
+                }
+            }
+        }
+        else TRACE("[callbackForEveryThing] Total usage sensor connected to Gas Reporting Device")
     }
-    else TRACE("[callbackForEveryThing] Total usage sensor connected to Power Reporting Device")
-    if (stateGas?.containsKey("idxGas") == false) { 
-        if (gasUsage > 0 && state.devReportGas != null) {
-            devReportGas = getChildDevice(state.devReportGas)
-            if (devReportGas) {
-                devReportGas.sendEvent(name:"energyMeter", value: "${gasTotal.round(3)}", unit:gasUnit)
-                devReportGas.sendEvent(name:"power", value: gasUsage.round(3), unit:gasUnit)
-                devReportGas.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("no data"))
-            }
-        }
-  	}
-    else TRACE("[callbackForEveryThing] Total usage sensor connected to Gas Reporting Device")
 }
 
 /*-----------------------------------------------------------------------------------------*/
@@ -1579,13 +1535,9 @@ def callbackStatus(evt) {
 }
 
 /*-----------------------------------------------------------------------------------------*/
-/*		dummy callback handlers for speed
+/*		dummy callback handlers for speed, when an error occurs it will show handler name
 /*-----------------------------------------------------------------------------------------*/
-def callbackLog(evt) {
-	// dummy handler for status returns, it prevents these responses from going into "normal" response processing
-    return getResponse(evt)
-}
-
+def callbackLog(evt) {return getResponse(evt)}
 def callbackKWHNotification(evt) {return getResponse(evt)}
 def callbackLuxNotification(evt) {return getResponse(evt)}
 def callbackHumidityNotification(evt) {return getResponse(evt)}
@@ -1605,12 +1557,10 @@ def callbackListHardware(evt) {
     if (response?.result == null) return
     
     state.dzHardwareIdx			= null
-	response.result.each { hardware ->
-    	if (hardware.Name == "SmartThings") {
-        	state.dzHardwareIdx = hardware.idx
-            pause 5
-            TRACE("[callbackListHardware] SmartThings Hardware id in Domoticz is ${state.dzHardwareIdx}")
-        }
+	response.result.findAll{it.Name == "SmartThings"}.each { hardware ->
+        state.dzHardwareIdx = hardware.idx
+        pause 5
+        TRACE("[callbackListHardware] SmartThings Hardware id in Domoticz is ${state.dzHardwareIdx}")
     }
 }
 
@@ -1621,42 +1571,33 @@ def callbackForSettings(evt) {
     def response = getResponse(evt)
     
 	if (response?.HTTPURL == null) return
-      
-	/* response.PushoverUser = "TEST"
-    response.HTTPURL = state.urlCustomActionHttp
-    
-    if (response.HTTPEnabled != 1) response.HTTPEnabled = 1
-	
-    def encoded = response.collect { k,v -> "${URLEncoder.encode(k.toString())}=${URLEncoder.encode(v.toString())}" }.join("&") */
     
     def decoded = response.HTTPURL.decodeBase64()
     def httpURL = new String(decoded)
-    TRACE("[callbackForSettings] ${httpURL} ${state.urlCustomActionHttp}")
-
-    if (httpURL != state.urlCustomActionHttp) {
-    	state.validUrl = false
-    	//sendNotification("CustomUrl in Domoticz Notifications Settings is invalid", [method: "push"])
-	}  
-    else state.validUrl = true 
-    	
-        /* def hubAction = new physicalgraph.device.HubAction(
-                        method: "POST",
-                        path: "/storesettings.webem",
-                        requestContentType: "application/x-www-form-urlencoded",
-                        headers: [HOST: "${state.networkId}"],
-                        null,
-                        body: encoded,
-                        [callback: callbackPostSettings] )
-
-         sendHubCommand(hubAction) */
-
+	state.validUrl = false
+	if (httpURL != state.urlCustomActionHttp) {
+        def postBody = getSettingsForm(response)      	
+        def hubAction = new physicalgraph.device.HubAction(
+                            method: "POST",
+                            path: "/storesettings.webem",
+                            requestContentType: "application/x-www-form-urlencoded",
+                            headers: [HOST: "${state.networkId}"],
+                            null,
+                            body: postBody,
+                            [callback: callbackPostSettings] )
+        sendHubCommand(hubAction) 
+    }
+    else state.validUrl = true
 }
 
 def callbackPostSettings(evt) {
-    def response = getResponse(evt)
-    log.error evt
-	
+    if (evt?.status != 200) log.error "[callbackPostSettings]" + evt?.status.toString()
+    else {
+    	TRACE("[callbackPostSettings] Post for storesettings succeeded")
+        state.validUrl = true
+    }
 }
+
 /*-----------------------------------------------------------------------------------------*/
 /*		callback after creation of the virtual sensor/device it will provide the new IDX
 /*		call for the provided device, this will create the link between IDX and NAME
@@ -1717,14 +1658,21 @@ private def defineDomoticzInSmartThings(request) {
                     'deviceType' : request.deviceType,
                     'subType' : request.subType,
                     'deviceId' : deviceId,
-                    'switchTypeVal' : switchTypeVal
+                    'switchTypeVal' : switchTypeVal,
+                    'name' : request.name
                     ]
             pause 5
 		}
+        else if (state.devices[request.idx].containsKey("name") == false) {
+        	state.devices[request.idx].name = request.name
+            pause 5
+        }
                         
         if (request.name != dev.name) {
         	dev.label = request.name
             dev.name = request.name
+            state.devices[request.idx].name = request.name
+            pause 5
         }
        
         // add base device Signal Strength and Battery components if applicable
@@ -1767,7 +1715,8 @@ private def defineDomoticzInSmartThings(request) {
                 'deviceType' : request.deviceType,
                 'subType' : request.subType,
                 'deviceId' : deviceId,
-                'switchTypeVal' : switchTypeVal
+                'switchTypeVal' : switchTypeVal,
+                'name' : request.name
             	]
 			pause 5
         } 
@@ -1959,7 +1908,6 @@ private def addReportDevices() {
                 dev = addChildDevice("verbem", "domoticzPowerReport", newdni, getHubID(), [name:passedName, label:passedName, completedSetup:true])
                 pause 5
             }
-            if (!state.listSensors["10000"]) state.listSensors["10000"] = [name: passedName, idx: "10000", type: "domoticzPowerReport"]
             state.devReportPower = newdni
             
             state.devices["10000"] = [
@@ -1968,7 +1916,8 @@ private def addReportDevices() {
                 'type'  : "Sensor",
                 'deviceType' : "domoticzPowerReport",
                 'subType' : "Energy",
-				'switchTypeVal' : "0"
+				'switchTypeVal' : "0",
+                'name' : passedName
             	]
             pause 3    
 			passedName = "Gas Reporting Device"
@@ -1979,7 +1928,6 @@ private def addReportDevices() {
                 dev = addChildDevice("verbem", "domoticzPowerReport", newdni, getHubID(), [name:passedName, label:passedName, completedSetup:true])
                 pause 5
             } 
-            if (!state.listSensors["10001"]) state.listSensors["10001"] = [name: passedName, idx: "10001", type: "domoticzPowerReport"]
             state.devReportGas = newdni
             state.devices["10001"] = [
                 'dni'   : newdni,
@@ -1987,7 +1935,8 @@ private def addReportDevices() {
                 'type'  : "Sensor",
                 'deviceType' : "domoticzPowerReport",
                 'subType' : "Gas",
-                'switchTypeVal' : "0"
+                'switchTypeVal' : "0",
+                'name' : passedName
             	]
 			pause 3
     }
@@ -1997,6 +1946,7 @@ private def addReportDevices() {
         	if (dev) {
             	deleteChildDevice(state.devReportPower)
             	state.remove("devReportPower")
+                //state.devices.remove("10000")
             }
         }
 		if (state?.devReportGas) {
@@ -2004,6 +1954,7 @@ private def addReportDevices() {
             if (dev) {
         		deleteChildDevice(state.devReportGas)
             	state.remove("devReportGas")
+                //state.devices.remove("10001")
             }
         }
     }
@@ -2302,7 +2253,6 @@ private def socketSend(passed) {
             break;
         case "CreateVirtualCustomDevice":  
         	hubPath = "/json.htm?type=createdevice&idx=${state.dzHardwareIdx}&sensorname=${passed.deviceName}&devicetype=${passed.deviceType}&devicesubtype=${passed.deviceSubType}"
-        	TRACE("Creating Power Meter in Domoticz")
         	hubCallback = [callback: callbackVirtualDevices]
         	break; 
         default:
@@ -2314,7 +2264,7 @@ private def socketSend(passed) {
     	log.error "Error in calling socketsend!!! check hubPath/Request assignment"
         return
     }
-	TRACE("[socketSend] callbackhandler: ${hubCallback.callback}")
+	TRACE("[socketSend] Request: ${passed.request} callbackhandler: ${hubCallback.callback}")
     sendHubCommand(new physicalgraph.device.HubAction(method: "GET", path: hubPath, headers: [HOST: "${state.networkId}"], null, hubCallback))
     pause 5
 }
@@ -2663,4 +2613,36 @@ def getWebData(params, desc, text=true) {
 	}
 }
 
-private def appVerInfo()		{ return getWebData([uri: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/DomoticzData", contentType: "text/plain; charset=UTF-8"], "changelog") }
+private def appVerInfo() { return getWebData([uri: "https://raw.githubusercontent.com/verbem/SmartThingsPublic/master/smartapps/verbem/DomoticzData", contentType: "text/plain; charset=UTF-8"], "changelog") }
+
+private def appDZInfo()	{ return getWebData([uri: "https://raw.githubusercontent.com/verbem/Domoticz-Server/master/smartapps/verbem/domoticz-server.src/V4Patch", contentType: "text/plain; charset=UTF-8"], "DZSettings") }
+
+private def getSettingsForm(dzSettings) {
+
+    def V4Keys = appDZInfo().split()
+    def V4 = [:]
+    V4Keys.each { key ->
+    	//if (!dzSettings.containsKey(key)) log.info "${key} not found in Settings"
+    	if (key.contains(":")) V4[key.split(":")[0]] = key.split(":")[1]
+        else V4[key] = ""
+    }
+    dzSettings.each { key, value ->
+    	if (key.toUpperCase().contains("ENABLE")) {if (value == 1) value = "on" else value = "off" }
+    	if (V4.containsKey(key)) V4[key] = value
+        //else log.info "${key} not found/needed in Form"
+    }
+    
+    if (dzSettings.HTTPURL != state.urlCustomActionHttp) {
+    	TRACE("[getSettingsForm] urlCustomActionHttp has been set")
+    	V4.HTTPURL = state.urlCustomActionHttp
+    	if (dzSettings.HTTPEnabled != 1) V4.HTTPEnabled = "on"
+    }
+    V4.remove("Patch")
+    // Exception where settings keyword != form keyword
+    V4.Themes = dzSettings.WebTheme
+    V4.Latitude = dzSettings.Location.Latitude
+    V4.Longitude = dzSettings.Location.Longitude
+    
+    def postData = V4.collect { "${it.key}=${URLEncoder.encode(it.value.toString(), "UTF-8")}" }.join("&")
+    return postData
+}
