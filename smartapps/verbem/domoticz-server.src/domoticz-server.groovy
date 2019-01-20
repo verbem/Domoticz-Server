@@ -26,6 +26,7 @@
     V7.22	SetPower for power/energy virtual devices defined in Domoticz
     V7.23	Testing with getUrl for websettings/storesettings form, looks good
     V7.24	Power Report changes
+    V7.25	energy used not energyMeter
  */
 
 import groovy.json.*
@@ -48,7 +49,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.24"}
+private def runningVersion() {"7.25"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -816,7 +817,8 @@ void handlerEvents(evt) {
             break
         case "power":
         	def energy = "0"
-        	if (dev.currentValue("energyMeter")) energy = dev.currentValue("energyMeter").toString()
+        	if (dev.currentValue("energy")) energy = dev.currentValue("energy").toString()
+        	else if (dev.currentValue("energyMeter")) energy = dev.currentValue("energyMeter").toString()
             socketSend([request: "SetPower", idx: idx, power:evt.stringValue, energy:energy])
         	break
         default:
