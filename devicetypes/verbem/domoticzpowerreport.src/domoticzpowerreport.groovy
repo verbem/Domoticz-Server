@@ -1,7 +1,7 @@
 /**
  *  domoticzPowerReport
  *
- *  Copyright 2017 Martin Verbeek
+ *  Copyright 2019 Martin Verbeek
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -49,23 +49,20 @@ metadata {
                 attributeState "energyMeter", label:'${currentValue} kWh', unit: "kWh"
             }
         }
-        standardTile("powerCR", "device.powerConsumption", inactiveLabel: false, decoration: "flat", width:4, height:2) {
-            state "powerConsumption", label:'${currentValue}'
-        }	        
-        standardTile("day", "day", inactiveLabel: false, decoration: "flat", width:2, height:2) {
-            state "default", label:'24 hours', action:"takeDay"
-        }		
-        standardTile("month", "month", inactiveLabel: false, decoration: "flat", width:2, height:2) {
-            state "default", label:'Month', action:"takeMonth"
-        }		
-        standardTile("year", "year", inactiveLabel: false, decoration: "flat", width:2, height:2) {
-            state "default", label:'Year', action:"takeYear"
-        }		
-        carouselTile("graph", "device.image", width: 6, height: 4)
-	}
+        
+        valueTile("consumptionHigh", "device.consumptionHigh", width: 2, height: 2) {
+        	state "consumptionHigh", label:'High ${currentValue} W', defaultState: true
+    	}
+        valueTile("consumptionLow", "device.consumptionLow", width: 2, height: 2) {
+        	state "consumptionLow", label:'Low ${currentValue} W', defaultState: true
+    	}
+        valueTile("momentaryUsage", "device.momentaryUsage", width: 2, height: 2) {
+        	state "momentaryUsage", label:'Usage ${currentValue} W', defaultState: true
+    	}
 
+	}
 	main "powerReport"
-    details(["powerReport", "powerCR"])
+    details(["powerReport","consumptionHigh","consumptionLow","momentaryUsage"])
 }
 
 // parse events into attributes
