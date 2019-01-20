@@ -25,6 +25,7 @@
 	V7.21	Some enhancements to the setup screens
     V7.22	SetPower for power/energy virtual devices defined in Domoticz
     V7.23	Testing with getUrl for websettings/storesettings form, looks good
+    V7.24	Power Report changes
  */
 
 import groovy.json.*
@@ -47,7 +48,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.23"}
+private def runningVersion() {"7.24"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -1257,15 +1258,22 @@ def callbackForEveryThing(evt) {
                 	powerUnit = it.CounterToday.split()[1]
                 	powerUsage = it.Usage.split()[1]
                     def consumptionLow = it.Data.split(";")[0]
+                    devReportPower.sendEvent(name:"consumptionlow", value: "${consumptionLow.toDouble().round(0)}", unit:"W")
                     def consumptionHigh = it.Data.split(";")[1]
+                    devReportPower.sendEvent(name:"consumptionHigh", value: "${consumptionHigh.toDouble().round(0)}", unit:"W")
                     def productionLow = it.Data.split(";")[2]
+                    devReportPower.sendEvent(name:"productionLow", value: "${productionLow.toDouble().round(0)}", unit:"W")
                     def productionHigh = it.Data.split(";")[3]
+                    devReportPower.sendEvent(name:"productionHigh", value: "${productionHigh.toDouble().round(0)}", unit:"W")
                     def momentaryUsage = it.Data.split(";")[4]
-                    def momentaryProduction = it.Data.split(";")[5]
-                    devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
+                    devReportPower.sendEvent(name:"momentaryUsage", value: "${momentaryUsage.toDouble().round(0)}", unit:"W")
+                    def momentaryProduction = it.Data.split(";")[5]                    
+                    devReportPower.sendEvent(name:"momentaryProduction", value: "${momentaryProduction.toDouble().round(0)}", unit:"W")
+
+					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
                     //devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total Low:${consumptionLow}\nTotal High:${consumptionHigh}\nProduction Low:${productionLow}\nProduction High:${productionHigh}\nMomentary Usage:${momentaryUsage}\nMomentary Production:${momentaryProduction}\nToday:${it.CounterToday}"))
-					devReportPower.sendEvent(name:"powerTotal", value: "Total Low:${consumptionLow}W\nTotal High:${consumptionHigh}W\nProduction Low:${productionLow}W\nProduction High:${productionHigh}W\nMomentary Usage:${momentaryUsage}W\nMomentary Production:${momentaryProduction}W\nToday:${it.CounterToday}")
+					//devReportPower.sendEvent(name:"powerTotal", value: "Total Low:${consumptionLow}W\nTotal High:${consumptionHigh}W\nProduction Low:${productionLow}W\nProduction High:${productionHigh}W\nMomentary Usage:${momentaryUsage}W\nMomentary Production:${momentaryProduction}W\nToday:${it.CounterToday}")
 				}            	
             }
         }
@@ -1345,8 +1353,8 @@ def callbackForEveryThing(evt) {
                 }
             }
         }
-        else TRACE("[callbackForEveryThing] Total usage sensor connected to Power Reporting Device")
-        if (stateGas?.containsKey("idxGas") == false) { 
+
+		if (stateGas?.containsKey("idxGas") == false) { 
             if (gasUsage > 0 && state.devReportGas != null) {
                 devReportGas = getChildDevice(state.devReportGas)
                 if (devReportGas) {
@@ -1358,7 +1366,6 @@ def callbackForEveryThing(evt) {
                 }
             }
         }
-        else TRACE("[callbackForEveryThing] Total usage sensor connected to Gas Reporting Device")
     }
 }
 
