@@ -13,6 +13,10 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+ 
+preferences {
+    input(name:"prefEnergy", type:"number", title: "Consumed kWh", description:"Energy consumption in kWh")
+}   
 metadata {
 	definition (name: "domoticzPowerReport", namespace: "verbem", author: "Martin Verbeek") {
 		capability "Sensor"
@@ -76,6 +80,7 @@ def installed() {
 
 def updated() {
 	initialize()
+    if (settings.prefEnergy) sendEvent(name: "energy", value: prefEnergy.toDouble())
 }
 
 def initialize() {
