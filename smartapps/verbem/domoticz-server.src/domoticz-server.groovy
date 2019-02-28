@@ -28,6 +28,7 @@
     V7.24	Power Report changes
     V7.25	energy used not energyMeter
     V7.26	Live Checker rework (gives not responding in smaller environments) and bugs wrt power/energy etc...
+    V7.27	kill push notifications
  */
 
 import groovy.json.*
@@ -50,7 +51,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.26"}
+private def runningVersion() {"7.27"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -531,7 +532,16 @@ private def initialize() {
 	addReportDevices()
     assignSensorToDevice()
     
+    //cleaning
     if (state.containsKey("listSensors")) state.remove("listSensors")
+    if (state.containsKey("reportGasDay")) state.remove("reportGasDay")
+    if (state.containsKey("reportGasMonth")) state.remove("reportGasMonth")
+    if (state.containsKey("reportGasYear")) state.remove("reportGasYear")
+    if (state.containsKey("reportPowerDay")) state.remove("reportPowerDay")
+    if (state.containsKey("reportPowerMonth")) state.remove("reportPowerMonth")
+    if (state.containsKey("reportPowerYear")) state.remove("reportPowerYear")
+    if (state.containsKey("requestedReport")) state.remove("requestedReport")
+    
     
     if (settings?.domoticzVirtualDevices == true) {
     	if (state.dzHardwareIdx == null) {
@@ -548,6 +558,7 @@ private def initialize() {
         if (dzPowerMeters) 		subscribe(dzPowerMeters, "power", handlerEvents)
         if (dzPowerMeters) 		subscribe(dzPowerMeters, "energy", handlerEvents)
         if (dzPowerMeters) 		subscribe(dzPowerMeters, "energyMeter", handlerEvents)
+        subscribe(app, eventTest)
         
         runIn(10, defineSmartThingsInDomoticz) 
     }
@@ -555,7 +566,6 @@ private def initialize() {
     	state.remove("virtualDevices")
         socketSend([request:"DeleteHardware"])
         state.remove("dzHardwareIdx")
-        pause 5
     }
         
     if 	(cleanUpNeeded() == true) {
@@ -604,9 +614,6 @@ private def assignSensorToDevice() {
                 if (!capability && k != "idxPower" || key == item) { // leave idxPower as it might be set automically, also leave capabilities that have same idx as device
                     state.devices[key]."${k}" = null
                 }
-                if (k == "idxPower" && getChildDevice(dev.dni).hasCommand("configure")) {
-                    //getChildDevice(dev.dni).configure("Graph")
-                }
          	}
     	}
     }
@@ -621,7 +628,7 @@ private def assignSensorToDevice() {
         if (state.devices[idx]) {
             state.devices[idx]."${capability}" = v
             dni = state.devices[idx].dni
-            if (!getChildDevice(dni)) log.error "${state.devices[idx].dni}"
+            if (!getChildDevice(dni)) log.warn "${state.devices[idx].dni}"
             if (getChildDevice(dni).hasCommand("configure")) {
             	def componentList = [idxHumidity	: "Relative Humidity Measurement",
                 					idxIlluminance	: "Illuminance Measurement",
@@ -637,9 +644,9 @@ private def assignSensorToDevice() {
                 component = componentList.find{it.key == capability}?.value
                 if (component) getChildDevice(dni).configure(component)
             }
-            else if (idx.toInteger() < 10000) log.debug "no configure on ${dni}"
+            else if (idx.toInteger() < 10000) TRACE("no configure on ${dni}")
         }
-        else log.info "no state.devices for ${idx}"
+        else TRACE("no state.devices for ${idx}")
     }
 }
 
@@ -648,34 +655,6 @@ void scheduledListSensorOptions() {
 	socketSend([request : "OptionUtility"])
     socketSend([request : "OptionTemperature"])
     socketSend([request : "OptionDevices"])
-}
-
-void scheduledPowerReport() {
-	TRACE("[scheduledPowerReport]")
-	state.requestedReport = "Power"   
-	state.reportPowerDay = [:]		// last 24 hours graph
-    state.reportPowerMonth = [:]	// last 31 days graph
-    state.reportPowerYear = [:]		// last 52 weeks graph
-
-	state.optionsPower.each { key, item ->
-        socketSend([request : "counters", idx : key, range : "day"])
-        socketSend([request : "counters", idx : key, range : "month"])
-        socketSend([request : "counters", idx : key, range : "year"])
-    }
-}
-
-void scheduledGasReport() {
-	TRACE("[scheduledGasReport]")
-	state.requestedReport = "Gas"      
-	state.reportGasDay = [:]		// last 24 hours graph
-    state.reportGasMonth = [:]		// last 31 days graph
-    state.reportGasYear = [:]		// last 52 weeks graph
-    
-	state.optionsGas.each { key, item ->
-        socketSend([request : "counters", idx : key, range : "day"])
-        socketSend([request : "counters", idx : key, range : "month"])
-        socketSend([request : "counters", idx : key, range : "year"])
-    }
 }
 
 void defineSmartThingsInDomoticz() {
@@ -749,7 +728,6 @@ void defineSmartThingsInDomoticz() {
             }
         }
     }
-    // POWER METERS
     dzPowerMeters.each { dev ->
         if (dev.deviceNetworkId.contains("IDX") == false) {
             if (getVirtualIdx([name: dev.displayName, type: "power"]) == null) {
@@ -779,7 +757,6 @@ void handlerEvents(evt) {
     if (evt.name.contains("energy")) idx = getVirtualIdx([name:dev.displayName, type: "power"])
     else idx = getVirtualIdx([name:dev.displayName, type: evt.name])
 	
-    TRACE("HANDLER ${evt.name} for ${idx}")
     if (idx) {   
         switch (evt.name) {
         case "switch":
@@ -809,7 +786,7 @@ void handlerEvents(evt) {
             if (dev.hasAttribute("power") && dev.currentValue("power").toDouble() > 0) power = dev.currentValue("power").toDouble().round(1)
             socketSend([request: "SetPower", idx: idx, power:power.toString(), energy:energy.toInteger().toString()])
             break
-        case ["power"]:
+        case "power":
         	def energy = 0
             if (dev.hasAttribute("energy") && dev.currentValue("energy").toDouble() > 0) energy = dev.currentValue("energy").toDouble().round(0)*1000	//Wh
             if (dev.hasAttribute("energyMeter") && dev.currentValue("energyMeter").toDouble() > 0) energy = dev.currentValue("energyMeter").toDouble()*1000	//Wh and preferred if exists
@@ -835,7 +812,6 @@ private def getVirtualIdx(passed) {
 void callbackForUCount(evt) {
     def response = getResponse(evt)   
     if (response?.result == null)  return
-	TRACE("[callbackForUCount] ${response.result.size()}")
 
 	response.result.each { utility ->
 		// Power usage    
@@ -963,8 +939,12 @@ private def doUtilityEvent(evt) {
     }    
 }
 /*-----------------------------------------------------------------------------------------*/
-/*		Build the idx list for Devices that are part of the selected room plans
+/*		Build the idx list for Devices that are part of the selected room plans and appState event handler test
 /*-----------------------------------------------------------------------------------------*/
+void eventTest(evt) {
+	TRACE("EVENTTEST ${evt.name} ${evt.value}")
+}
+
 void callbackForRoom(evt) {
 	def response = getResponse(evt)
 	if (response?.result == null) return
@@ -1005,7 +985,6 @@ void callbackForScenes(evt) {
     def response = getResponse(evt)
     def groupIdx = response?.result.collect {it.idx}.sort()
     state.statusScenes = groupIdx
-    pause 2
 
 	if (response?.result == null) return
 
@@ -1044,7 +1023,6 @@ private def callbackForDevices(statusrsp) {
     	TRACE("[callbackForDevices] result == null ${statusrsp}")
     	return	
     }
-	TRACE("[callbackForDevices] ${statusrsp.result.size()} ${statusrsp.result.idx}")
     
 	def compareTypeVal
     def SubType
@@ -1069,6 +1047,7 @@ private def callbackForDevices(statusrsp) {
             if (device?.Type == "Air Quality") compareTypeVal = 96
             if (device?.SubType == "Sound Level") compareTypeVal = 95
             if (device?.SubType == "kWh") compareTypeVal = 29
+            if (device?.Type == "Lux") compareTypeVal = 94 
             if (device?.SetPoint) compareTypeVal = 98
             
             // REAL SmartThings devices that where defined in Domoticz as virtual devices
@@ -1111,7 +1090,7 @@ private def callbackForDevices(statusrsp) {
                         SubType = "temperature"
                         dev = settings.dzSensorsTemp.find{it.displayName == device.Name}
                         break
-                    case 100:
+                    case 94:
                         SubType = "illuminance"
                         dev = settings.dzSensorsIll.find{it.displayName == device.Name}
                         break
@@ -1154,7 +1133,7 @@ private def callbackForDevices(statusrsp) {
                     case 99:			//	Sensors
                         if (domoticzTypes.contains("(Virtual) Sensors")) defineDomoticzInSmartThings(idx: device.idx, deviceType:"domoticzSensor", name:device.Name, subType: device.Type, dzStatus: device, updateEvents: updateEvents)
                         break
-                    case 100:
+                    case [29, 100, 94]:
                         break
                     default:
                         TRACE("[callbackForDevices] non handled SwitchTypeVal ${compareTypeVal} ${device}")
@@ -1267,8 +1246,6 @@ def callbackForEveryThing(evt) {
 
 					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
-                    //devReportPower.sendEvent(name:"powerConsumption", value: JsonOutput.toJson("Total Low:${consumptionLow}\nTotal High:${consumptionHigh}\nProduction Low:${productionLow}\nProduction High:${productionHigh}\nMomentary Usage:${momentaryUsage}\nMomentary Production:${momentaryProduction}\nToday:${it.CounterToday}"))
-					//devReportPower.sendEvent(name:"powerTotal", value: "Total Low:${consumptionLow}W\nTotal High:${consumptionHigh}W\nProduction Low:${productionLow}W\nProduction High:${productionHigh}W\nMomentary Usage:${momentaryUsage}W\nMomentary Production:${momentaryProduction}W\nToday:${it.CounterToday}")
 				}            	
             }
         }
@@ -1364,67 +1341,6 @@ def callbackForEveryThing(evt) {
 }
 
 /*-----------------------------------------------------------------------------------------*/
-/*		callback for creating usage reports (DAY, MONTH and YEAR)
-/*-----------------------------------------------------------------------------------------*/
-def callbackForCounters(evt) {
-    def response = getResponse(evt)
-	if (response?.result == null) return
-    
-    def hour
-    def day
-    def week
-    def date
-
-    switch (response.title.split()[2]) {
-        case "day":
-			def dayList
-            if (state.requestedReport == "Power") dayList = state.reportPowerDay
-            if (state.requestedReport == "Gas") dayList = state.reportGasDay
-            
-            response.result.each { p ->
-            	hour = p.d
-                if (dayList[hour]) dayList[hour] = dayList[hour] + p.v.toFloat() else dayList[hour] = p.v.toFloat()
-            }
-            if (state.requestedReport == "Power") state.reportPowerDay = dayList
-            if (state.requestedReport == "Gas") state.reportGasDay = dayList
-
-	        break;
-            
-        case "month":
-			def monthList
-            if (state.requestedReport == "Power") monthList = state.reportPowerMonth
-            if (state.requestedReport == "Gas") monthList = state.reportGasMonth
-            
-            response.result.each { p ->
-            	day = p.d
-                if (monthList[day]) monthList[day] = monthList[day] + p.v.toFloat() else monthList[day] = p.v.toFloat()
-                monthList[day] = monthList[day].round(3)
-            }
-            if (state.requestedReport == "Power") state.reportPowerMonth = monthList
-            if (state.requestedReport == "Gas") state.reportGasMonth = monthList
-
-            break;
-            
-        case "year":
-			def yearList
-            if (state.requestedReport == "Power") yearList = state.reportPowerYear
-            if (state.requestedReport == "Gas") yearList = state.reportGasYear
-            
-            response.result.each { p ->
-                date = new Date().parse('yyyy-MM-dd', "${p.d}")
-                week = "${date.getAt(Calendar.YEAR)}-${date.getAt(Calendar.WEEK_OF_YEAR)}"
-                if (yearList[week]) yearList[week] = yearList[week] + p.v.toFloat() else yearList[week] = p.v.toFloat()
-                yearList[week] = yearList[week].round(3)
-            }
-            if (state.requestedReport == "Power") state.reportPowerYear = yearList
-            if (state.requestedReport == "Gas") state.reportGasYear = yearList
-
-            break;
-    } 
-
-}
-
-/*-----------------------------------------------------------------------------------------*/
 /*		callback for getting all devices 
 /*-----------------------------------------------------------------------------------------*/
 def handleList(evt) {
@@ -1466,7 +1382,7 @@ def handleList(evt) {
                 TRACE("[handleList] deleted child ${app.id + ":IDX:" + idx}")
             }
             catch (e) {
-                log.error "[handleList] error deleting child ${app.id + ":IDX:" + idx}"
+                log.warn "[handleList] error deleting child ${app.id + ":IDX:" + idx}"
             }
         }
              
@@ -1522,7 +1438,7 @@ private def handleSceneTransformation(sceneList) {
                 	log.warn "[handleSceneTransformation] existing state for new scene device ${newIdx}"
                 }
             }
-            else log.error "[handleSceneTransformation] non existing scene device ${sceneIdx}"
+            else log.warn "[handleSceneTransformation] non existing scene device ${sceneIdx}"
         }
     }
 }
@@ -1647,7 +1563,7 @@ private def defineDomoticzInSmartThings(request) {
             devOnline(dev)
         }
         else {
-            log.debug "[defineDomoticzInSmartThings] Device ${request.name} offline"
+            TRACE("[defineDomoticzInSmartThings] Device ${request.name} offline")
             devOffline(dev)
         }       
     }
@@ -1667,18 +1583,15 @@ private def defineDomoticzInSmartThings(request) {
                     'switchTypeVal' : switchTypeVal,
                     'name' : request.name
                     ]
-            //pause 5
 		}
         else if (state.devices[request.idx].containsKey("name") == false) {
         	state.devices[request.idx].name = request.name
-            pause 5
         }
                         
         if (request.name != dev.name) {
         	dev.label = request.name
             dev.name = request.name
             state.devices[request.idx].name = request.name
-            //pause 5
         }
        
         // add base device Signal Strength and Battery components if applicable
@@ -1873,7 +1786,7 @@ private def createAttributes(domoticzDevice, domoticzStatus, idx) {
 /*		the modes are being retrieved from a multiselector switch that is related to
 /*		the thermostat in the smartapp (this is done with composite devices)
 /*-----------------------------------------------------------------------------------------*/
-private def sendThermostatModes() {
+def sendThermostatModes() {
 	def thermoDev
     def selectorDev
     def idxMode
@@ -1890,7 +1803,7 @@ private def sendThermostatModes() {
                 thermoDev.sendEvent(name : "supportedThermostatModes", value : JsonOutput.toJson(tModes)) 
             }
             else {
-            	log.error "mode device not found ${app.id}:IDX:${idxMode}"
+            	log.warn "mode device not found ${app.id}:IDX:${idxMode}"
             }
         }
 	}
@@ -2071,10 +1984,6 @@ def domoticz_setcolorWhite(nid, xHex, xSat, xBri) {
     socketSend([request : "on", idx : nid])
 }
 
-def domoticz_counters(nid, range) {
-	socketSend([request : "counters", idx : nid, range : range])
-}
-
 def domoticz_setpoint(nid, setpoint) {
 	socketSend([request : "SetPoint", idx : nid, setpoint : setpoint])
 }
@@ -2172,10 +2081,6 @@ private def socketSend(passed) {
          case "setcolorwhite":
         	hubPath = "/json.htm?type=command&param=setcolbrightnessvalue&idx=${passed.idx}&hex=${passed.hex}&iswhite=true&brightness=${passed.brightness}&saturation=${passed.saturation}"
             break;
-         case "counters":
-         	hubPath = "/json.htm?type=graph&sensor=counter&idx=${passed.idx}&range=${passed.range}"
-            hubCallback = [callback: callbackForCounters]
-            break;
          case "SetPoint":  
          	hubPath = "/json.htm?type=setused&idx=${passed.idx}&setpoint=${passed.setpoint}&mode=ManualOverride&until=&used=true"
             break;
@@ -2266,7 +2171,7 @@ private def socketSend(passed) {
     }
 	TRACE("[socketSend] Request: ${passed.request} callbackhandler: ${hubCallback.callback}")
     sendHubCommand(new physicalgraph.device.HubAction(method: "GET", path: hubPath, headers: [HOST: "${state.networkId}"], null, hubCallback))
-    pause 5
+    //pause 5
 }
 
 void aliveResponse(evt) {
@@ -2275,7 +2180,7 @@ void aliveResponse(evt) {
 
     if (state.aliveAgain == false) {
     	state.aliveAgain = true
-        sendNotification("${app.name} ${app.label} is responding again", [method: "push"])
+        //sendNotification("${app.name} ${app.label} is responding again", [method: "push"])
         
         if (state.devicesOffline) devicesOnline()
         socketSend([request : "List"])
@@ -2283,6 +2188,11 @@ void aliveResponse(evt) {
 }
 
 void aliveChecker(evt) {
+
+    runIn(5, sendThermostatModes)
+    runIn(10, refreshDevicesFromDomoticz)
+    runIn(30, scheduledListSensorOptions)
+    
 	def cycles 
 	if (state?.scheduleCycle == null)  state.scheduleCycle = 11i
     
@@ -2291,33 +2201,16 @@ void aliveChecker(evt) {
 	if (state.alive == false && state.aliveCount > 1) {
     	state.aliveAgain = false
         if (!state.devicesOffline) {
-        	sendNotification("${app.name} ${app.label} is not responding", [method: "push"])
+        	//sendNotification("${app.name} ${app.label} is not responding", [method: "push"])
         	devicesOffline()
         }
     }
     
     if (state.aliveCount) state.aliveCount = state.aliveCount + 1
     else state.aliveCount = 1
+    
     state.alive = false  
-    pause 3
     socketSend([request : "alive"])
-
-	// -----------------------------------------------
-	// standard scheduling, not using ST schedule methods
-	// -----------------------------------------------
-    sendThermostatModes()
-    runIn(10, refreshDevicesFromDomoticz)
-    runIn(30, scheduledListSensorOptions)
-
-    if (cycles % 12 == 0) {
-        
-        if (state.devReportPower != null) {      
-        	runIn(40, scheduledPowerReport)
-        }
-        if (state.devReportGas != null) {      
-        	runIn(60+40, scheduledGasReport)
-        }
-    }
     state.scheduleCycle = cycles
 }
 
@@ -2330,7 +2223,7 @@ private def devOffline(dev) {
 }
 
 void devicesOnline() {
-    log.info "[devicesOnline] turn devices ONLINE"
+    log.warn "[devicesOnline] turn devices ONLINE"
 
 	getChildDevices().each { dev ->
     	
@@ -2345,7 +2238,7 @@ void devicesOnline() {
 }
 
 void devicesOffline() {
-    log.error "[devicesOffline] turn devices OFFLINE"
+    log.warn "[devicesOffline] turn devices OFFLINE"
 
 	getChildDevices().each { dev ->
     
@@ -2365,14 +2258,11 @@ void refreshDevicesFromDomoticz() {
     
     socketSend([request : "roomplans"])
 	state.listOfRoomPlanDevices = []
-    pause 5
+    //pause 5
     
-    settings.domoticzPlans.each { v -> 
-        state.statusPlansRsp.each {
-            if (v == it.Name) {
-                socketSend([request : "roomplan", idx : it.idx])
-                pause 2
-            }
+    state.statusPlansRsp.findAll{it.Name in settings.domoticzPlans.toList()}.each {
+        if (it.Devices.toInteger() > 0) {
+        	socketSend([request : "roomplan", idx : it.idx])
         }
     }
 
@@ -2463,8 +2353,7 @@ def eventDomoticz() {
         }
         
 		if (!getChildDevice(dni)) { // device has been deleted and notifications still present.
-        	log.error "[eventDomoticz] IDX with no defined Device ${params.message}"
-        	//socketSend([request : "status", idx : idx])
+        	log.warn "[eventDomoticz] IDX with no defined Device ${params.message}"
             socketSend([request : "ClearNotification", idx : idx])	// let the app redefine notification
         }
         else {        
@@ -2497,7 +2386,7 @@ def eventDomoticz() {
     	}
     }
     else if (params.message.contains("SENSOR ") && params.message.split().size() != 4) {
-    		log.error "[eventDomoticz] Partial ${params.message} Auto define Notifications"
+    		log.warn "[eventDomoticz] Partial ${params.message} Auto define Notifications"
             def idx = params.message.split()[1]
             socketSend([request : "ClearNotification", idx : idx])	// let the app redefine notification
     	}  
@@ -2533,7 +2422,7 @@ private def initRestApi() {
         	TRACE("[initRestApi] Created new access token: ${state.accessToken}")
         }
         catch (e) {
-			log.error "[initRestApi] did you enable OAuth in the IDE for this APP?"
+			log.warn "[initRestApi] did you enable OAuth in the IDE for this APP?"
         }
     }
     state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
@@ -2621,14 +2510,12 @@ private def getSettingsForm(dzSettings) {
     def V4Keys = appDZInfo().split()
     def V4 = [:]
     V4Keys.each { key ->
-    	//if (!dzSettings.containsKey(key)) log.info "${key} not found in Settings"
     	if (key.contains(":")) V4[key.split(":")[0]] = key.split(":")[1]
         else V4[key] = ""
     }
     dzSettings.each { key, value ->
     	if (key.toUpperCase().contains("ENABLE")) {if (value == 1) value = "on" else value = "off" }
     	if (V4.containsKey(key)) V4[key] = value
-        //else log.info "${key} not found/needed in Form"
     }
     
     if (dzSettings.HTTPURL != state.urlCustomActionHttp) {
