@@ -2,12 +2,13 @@
 /**
  *  domoticzBlinds
  *
- *  Copyright 2018 Martin Verbeek
+ *  Copyright 2019 Martin Verbeek
  *
  *	4.0 2018-02-12 Add windowShade capability, fix eodDone
  *	4.1	2018-04-05 Introduce configure for all non standard attributes and commands
  *	4.2	2018-06-02 Moved EOD processing to SM
  *	4.3	2018-06-21 Removed calibrate, moved it to timed session capability
+ * 	4.4 2019-03-16 presetPosition gone as a command for windowshades???? named it in commands
  */
 import groovy.time.TimeCategory 
 import groovy.time.TimeDuration
@@ -16,7 +17,7 @@ preferences {
     input(name:"stopSupported", type:"bool", title: "Stop command supported?", description:"Does your blind use the STOP command to halt the blind. NOT to be confused with the Somfy Stop/My command!", defaultValue:false)
 }   
 metadata {
-	definition (name: "domoticzBlinds", namespace: "verbem", author: "Martin Verbeek", vid: "generic-shade", ocfdevicetype: "oic.d.blind") {
+	definition (name: "domoticzBlinds", namespace: "verbem", author: "Martin Verbeek", vid: "generic-shade") {
     
         capability "Actuator"
         capability "Switch"
@@ -28,6 +29,8 @@ metadata {
         capability "Window Shade"
         capability "Configuration"
         capability "Timed Session"
+        
+        command "presetPosition"
 
     }
 
@@ -46,17 +49,15 @@ metadata {
             }
         }
         
-        standardTile("Up", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
+        standardTile("Up", "device.windowShade", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
             state "default", label:'Up', icon:"st.doors.garage.garage-opening",
                 action:"open"
         }
 
-        standardTile("Preset", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
-            state "default", label:'Preset', icon:"st.doors.garage.garage-open",
-                action:"presetPosition"
-        }
+        standardTile("PP", "device.windowShade", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
+            state "default", label:'Preset', icon:"st.doors.garage.garage-open", action: "presetPosition" }
 
-        standardTile("Down", "device.switch", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
+        standardTile("Down", "device.windowShade", width: 2, height: 2, inactiveLabel:false, decoration:"flat") {
             state "default", label:'Down', icon:"st.doors.garage.garage-closing",
                 action:"close"
         }
@@ -83,7 +84,7 @@ metadata {
         childDeviceTile("cloudCover", "SmartScreens", decoration: "flat", width: 2, height: 2, childTileName: "cloudCover")
         
         main(["richDomoticzBlind"])
-	    details(["richDomoticzBlind", "Up", "Preset", "Down", "Cal", "rssi", "Refresh", "windBearing", "windSpeed", "sunBearing", "cloudCover"])
+	    details(["richDomoticzBlind", "Up", "PP", "Down", "Cal", "Refresh", "rssi", "windBearing", "windSpeed", "sunBearing", "cloudCover"])
 
     }    
 }
@@ -136,6 +137,15 @@ def close() {
     }
 }
 
+void presetPosition() {
+	log.debug "presetPosition()"
+    if (parent) {
+        sendEvent(name:'windowShade', value:"partially open" as String)
+        parent.domoticz_stop(getIDXAddress())
+    }
+
+}
+
 def refresh() {
 	log.debug "refresh()"
 
@@ -156,15 +166,6 @@ def open() {
 		sendEvent(name:'windowShade', value:"open" as String)
         parent.domoticz_off(getIDXAddress())
     }
-}
-
-def presetPosition() {
-	log.debug "presetPosition()"
-    if (parent) {
-        sendEvent(name:'windowShade', value:"partially open" as String)
-        parent.domoticz_stop(getIDXAddress())
-    }
-
 }
 
 def setLevel(level) {
@@ -333,7 +334,7 @@ def initialize() {
 
 	if (parent) {
         sendEvent(name: "DeviceWatch-Enroll", value: groovy.json.JsonOutput.toJson([protocol: "LAN", scheme:"untracked"]), displayed: false)
-        createComponent()
+        //createComponent()
     }
     else {
     	log.error "You cannot use this DTH without the related SmartAPP Domoticz Server, the device needs to be a child of this App"
