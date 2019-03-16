@@ -29,6 +29,7 @@
     V7.25	energy used not energyMeter
     V7.26	Live Checker rework (gives not responding in smaller environments) and bugs wrt power/energy etc...
     V7.27	kill push notifications
+    V7.28	bug in refreshdevices when settings.roomplans = null
  */
 
 import groovy.json.*
@@ -51,7 +52,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.27"}
+private def runningVersion() {"7.28"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -2260,12 +2261,14 @@ void refreshDevicesFromDomoticz() {
 	state.listOfRoomPlanDevices = []
     //pause 5
     
-    state.statusPlansRsp.findAll{it.Name in settings.domoticzPlans.toList()}.each {
-        if (it.Devices.toInteger() > 0) {
-        	socketSend([request : "roomplan", idx : it.idx])
+    if (settings.domoticzPlans) {
+        state.statusPlansRsp.findAll{it.Name in settings.domoticzPlans.toList()}.each {
+            if (it.Devices.toInteger() > 0) {
+                socketSend([request : "roomplan", idx : it.idx])
+            }
         }
-    }
-
+	}
+    
     socketSend([request : "scenes"])
     socketSend([request : "List"])
 }
