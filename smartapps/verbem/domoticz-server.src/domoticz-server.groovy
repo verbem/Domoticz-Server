@@ -30,6 +30,7 @@
     V7.26	Live Checker rework (gives not responding in smaller environments) and bugs wrt power/energy etc...
     V7.27	kill push notifications
     V7.28	bug in refreshdevices when settings.roomplans = null
+    V7.29	consumptionlow to consumptionLow
  */
 
 import groovy.json.*
@@ -52,7 +53,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.28"}
+private def runningVersion() {"7.29"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -1233,17 +1234,17 @@ def callbackForEveryThing(evt) {
                 	powerUnit = it.CounterToday.split()[1]
                 	powerUsage = it.Usage.split()[1]
                     def consumptionLow = it.Data.split(";")[0]
-                    devReportPower.sendEvent(name:"consumptionlow", value: "${consumptionLow.toDouble().round(0)}", unit:"W")
+                    devReportPower.sendEvent(name:"consumptionLow", value: "${consumptionLow.toInteger()}", unit:"W")
                     def consumptionHigh = it.Data.split(";")[1]
-                    devReportPower.sendEvent(name:"consumptionHigh", value: "${consumptionHigh.toDouble().round(0)}", unit:"W")
+                    devReportPower.sendEvent(name:"consumptionHigh", value: "${consumptionHigh.toInteger()}", unit:"W")
                     def productionLow = it.Data.split(";")[2]
-                    devReportPower.sendEvent(name:"productionLow", value: "${productionLow.toDouble().round(0)}", unit:"W")
+                    devReportPower.sendEvent(name:"productionLow", value: "${productionLow.toInteger()}", unit:"W")
                     def productionHigh = it.Data.split(";")[3]
-                    devReportPower.sendEvent(name:"productionHigh", value: "${productionHigh.toDouble().round(0)}", unit:"W")
+                    devReportPower.sendEvent(name:"productionHigh", value: "${productionHigh.toInteger()}", unit:"W")
                     def momentaryUsage = it.Data.split(";")[4]
-                    devReportPower.sendEvent(name:"momentaryUsage", value: "${momentaryUsage.toDouble().round(0)}", unit:"W")
+                    devReportPower.sendEvent(name:"momentaryUsage", value: "${momentaryUsage.toInteger()}", unit:"W")
                     def momentaryProduction = it.Data.split(";")[5]                    
-                    devReportPower.sendEvent(name:"momentaryProduction", value: "${momentaryProduction.toDouble().round(0)}", unit:"W")
+                    devReportPower.sendEvent(name:"momentaryProduction", value: "${momentaryProduction.toInteger()}", unit:"W")
 
 					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
