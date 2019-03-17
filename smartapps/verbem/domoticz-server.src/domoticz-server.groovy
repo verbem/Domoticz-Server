@@ -31,6 +31,7 @@
     V7.27	kill push notifications
     V7.28	bug in refreshdevices when settings.roomplans = null
     V7.29	consumptionlow to consumptionLow
+    V7.30	bug fix power
  */
 
 import groovy.json.*
@@ -53,7 +54,7 @@ definition(
 )
 
 private def cleanUpNeeded() {return true}
-private def runningVersion() {"7.29"}
+private def runningVersion() {"7.30"}
 private def textVersion() { return "Version ${runningVersion()}"}
 
 /*-----------------------------------------------------------------------------------------*/
@@ -1246,7 +1247,7 @@ def callbackForEveryThing(evt) {
                     def momentaryProduction = it.Data.split(";")[5]                    
                     devReportPower.sendEvent(name:"momentaryProduction", value: "${momentaryProduction.toInteger()}", unit:"W")
 
-					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toInteger()}", unit:powerUnit)
+					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
                     devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toInteger(), unit:powerUsage)
 				}            	
             }
