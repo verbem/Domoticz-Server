@@ -1233,21 +1233,21 @@ def callbackForEveryThing(evt) {
                 if (devReportPower) {
                 	powerUnit = it.CounterToday.split()[1]
                 	powerUsage = it.Usage.split()[1]
-                    def consumptionLow = it.Data.split(";")[0]
-                    devReportPower.sendEvent(name:"consumptionLow", value: "${consumptionLow.toInteger()}", unit:"W")
-                    def consumptionHigh = it.Data.split(";")[1]
-                    devReportPower.sendEvent(name:"consumptionHigh", value: "${consumptionHigh.toInteger()}", unit:"W")
-                    def productionLow = it.Data.split(";")[2]
-                    devReportPower.sendEvent(name:"productionLow", value: "${productionLow.toInteger()}", unit:"W")
-                    def productionHigh = it.Data.split(";")[3]
-                    devReportPower.sendEvent(name:"productionHigh", value: "${productionHigh.toInteger()}", unit:"W")
+                    def consumptionLow = it.Data.split(";")[0].toInteger()/1000
+                    devReportPower.sendEvent(name:"consumptionLow", value: "${consumptionLow.toInteger()}", unit:"kWh")
+                    def consumptionHigh = it.Data.split(";")[1].toInteger()/1000
+                    devReportPower.sendEvent(name:"consumptionHigh", value: "${consumptionHigh.toInteger()}", unit:"kWh")
+                    def productionLow = it.Data.split(";")[2].toInteger()/1000
+                    devReportPower.sendEvent(name:"productionLow", value: "${productionLow.toInteger()}", unit:"kWh")
+                    def productionHigh = it.Data.split(";")[3].toInteger()/1000
+                    devReportPower.sendEvent(name:"productionHigh", value: "${productionHigh.toInteger()}", unit:"kWh")
                     def momentaryUsage = it.Data.split(";")[4]
                     devReportPower.sendEvent(name:"momentaryUsage", value: "${momentaryUsage.toInteger()}", unit:"W")
                     def momentaryProduction = it.Data.split(";")[5]                    
                     devReportPower.sendEvent(name:"momentaryProduction", value: "${momentaryProduction.toInteger()}", unit:"W")
 
-					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toDouble().round(0)}", unit:powerUnit)
-                    devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toDouble().round(0), unit:powerUsage)
+					devReportPower.sendEvent(name:"energyMeter", value: "${it.Counter.toInteger()}", unit:powerUnit)
+                    devReportPower.sendEvent(name:"power", value: it.Usage.split()[0].toInteger(), unit:powerUsage)
 				}            	
             }
         }
