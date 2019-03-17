@@ -13,11 +13,13 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  */
+
 metadata {
 	definition (name: "domoticzSensor Power Meter", namespace: "verbem", author: "Martin Verbeek") {
 		capability "Sensor"
         capability "Power Meter"
         capability "Health Check"
+        
     }
 
 	tiles

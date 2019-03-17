@@ -31,7 +31,7 @@ metadata {
 	tiles(scale: 2) {       
         multiAttributeTile(name:"powerReport", type:"generic", width:6, height:4) {
             tileAttribute("device.power", key: "PRIMARY_CONTROL") {
-                attributeState "level", label:'${currentValue} W', unit: "W" , defaultState: true, action: "take", backgroundColors:[                   
+                attributeState "level", label:'${currentValue}W', unit: "W" , defaultState: true, action: "take", backgroundColors:[                   
                     [value: 0, color: "#153591"],      	//dark blue
                     [value: 1000, color: "#1e9cbb"],    //light blue
                     [value: 2200, color: "#90d2a7"],	//greenish
@@ -47,10 +47,10 @@ metadata {
         }
         
         valueTile("consumptionHigh", "device.consumptionHigh", width: 2, height: 2) {
-        	state "consumptionHigh", label:'High ${currentValue}W', defaultState: true
+        	state "consumptionHigh", label:'High ${currentValue}kWh', defaultState: true
     	}
         valueTile("consumptionLow", "device.consumptionLow", width: 2, height: 2) {
-        	state "consumptionLow", label:'Low ${currentValue}W', defaultState: true
+        	state "consumptionLow", label:'Low ${currentValue}kWh', defaultState: true
     	}
         valueTile("momentaryUsage", "device.momentaryUsage", width: 2, height: 2) {
         	state "momentaryUsage", label:'Usage ${currentValue}W', defaultState: true
@@ -58,7 +58,7 @@ metadata {
 
 	}
 	main "powerReport"
-    details(["powerReport","consumptionHigh","consumptionLow","momentaryUsage"])
+    details(["powerReport","consumptionHigh","consumptionLow"])
 }
 
 // parse events into attributes

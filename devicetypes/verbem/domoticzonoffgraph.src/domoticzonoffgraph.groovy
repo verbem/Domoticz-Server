@@ -20,7 +20,6 @@ metadata {
     	capability "Configuration"
         capability "Actuator"
         capability "Sensor"
-        capability "Image Capture"
 
         // custom commands
         command "hourLog"
@@ -34,8 +33,14 @@ metadata {
     }
 
     tiles(scale:2) {
+    
+    	htmlTile(name:"webGraph",
+                action: "getGraphHTML",
+                refreshInterval: 1,
+                width: 6,
+                height: 4, 
+                whitelist: ["www.gstatic.com"])
         
-        carouselTile("graph", "device.image", width: 6, height: 4)
         
         standardTile("HourLog", "device.hour", decoration: "flat", width: 1, height: 1) {
         	state "Graph", label:'48 Hour Log', action: "hourLog", defaultState: true
@@ -62,12 +67,15 @@ metadata {
         	state "noGraph", label:'No Year Usage', action: "year"
         }
             
-        main(["graph"])
+        main(["webGraph"])
         
-        details(["day", "week", "month", "year", "graph"])
+        details(["day", "week", "month", "year", "webGraph"])
     }
 }
 
+mappings {
+ 	path("/getGraphHTML") {action: [GET: "getGraphHTML"]}
+}
 
 def parse(Map message) {
 	log.info message
@@ -136,43 +144,15 @@ def year() {
 	parent.year()
 }
 
-def take(Map parentState) {
-	log.debug "Take() child"
-    log.debug parentState
-	def imageCharts = "https://image-charts.com/chart?"
-	def params = [uri: "${imageCharts}chs=720x480&chd=${parentState.chd}&cht=bvg&chds=a&chxt=x,y&chxl=${parentState.chxl}&chts=0000FF,20&chco=${parentState.chco}&chtt=${parentState.chtt}"]
-    
-    if (state.imgCount == null) state.imgCount = 0
- 
-    try {
-        httpGet(params) { response ->
-        	
-            if (response.status == 200 && response.headers.'Content-Type'.contains("image/png")) {
-                def imageBytes = response.data
-                if (imageBytes) {
-                    state.imgCount = state.imgCount + 1
-                    def name = "PowerUsage$state.imgCount"
-
-                    // the response data is already a ByteArrayInputStream, no need to convert
-                    try {
-                        storeImage(name, imageBytes, "image/png")
-                    } catch (e) {
-                        log.error "error storing image: $e"
-                    }
-                }
-            }
-        else log.error "wrong format of content"
-        }
-    } catch (err) {
-        log.error ("Error making request: $err")
-    }
+def getDataString(Integer seriesIndex) {
+ 	def dataString = "2,3,5,7,10"
+ 	return dataString
 }
 
-private def getResponse(evt) {
-
-    if (evt instanceof physicalgraph.device.HubResponse) {
-        return evt.json
-    }
+def getStartTime() {
+	def startTime = 24
+	
+	return startTime
 }
 
 def installed() {
@@ -189,6 +169,85 @@ def initialize() {
         sendEvent(name: "DeviceWatch-Enroll", value: groovy.json.JsonOutput.toJson([protocol: "LAN", scheme:"untracked"]), displayed: false)
     }
     else {
-    	log.error "You cannot use this DTH without the related SmartAPP Domoticz Server, the device needs to be a child of this App"
+    	log.error "You cannot use this DTH without the domoticzOnOff DTH, the device needs to be a child of this DTH"
     }
+}
+
+def getGraphHTML() {
+	def html = """
+		<!DOCTYPE html>
+			<html>
+				<head>
+					<meta http-equiv="cache-control" content="max-age=0"/>
+					<meta http-equiv="cache-control" content="no-cache"/>
+					<meta http-equiv="expires" content="0"/>
+					<meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT"/>
+					<meta http-equiv="pragma" content="no-cache"/>
+					<meta name="viewport" content="width = device-width">
+					<meta name="viewport" content="initial-scale = 1.0, user-scalable=no">
+					<style type="text/css">body,div {margin:0;padding:0}</style>
+					<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+					<script type="text/javascript">
+						google.charts.load('current', {packages: ['corechart']});
+						google.charts.setOnLoadCallback(drawGraph);
+						function drawGraph() {
+							var data = new google.visualization.DataTable();
+							data.addColumn('timeofday', 'time');
+							data.addColumn('number', 'Energy (Yesterday)');
+							data.addColumn('number', 'Power (Yesterday)');
+							data.addColumn('number', 'Energy (Today)');
+							data.addColumn('number', 'Power (Today)');
+							data.addRows([
+								"2,3,5,7,10"
+							]);
+							var options = {
+								fontName: 'San Francisco, Roboto, Arial',
+								height: 240,
+								hAxis: {
+									format: 'H:mm',
+									minValue: [${getStartTime()},0,0],
+									slantedText: false
+								},
+								series: {
+									0: {targetAxisIndex: 1, color: '#FFC2C2', lineWidth: 1},
+									1: {targetAxisIndex: 0, color: '#D1DFFF', lineWidth: 1},
+									2: {targetAxisIndex: 1, color: '#FF0000'},
+									3: {targetAxisIndex: 0, color: '#004CFF'}
+								},
+								vAxes: {
+									0: {
+										title: 'Power (W)',
+										format: 'decimal',
+										textStyle: {color: '#004CFF'},
+										titleTextStyle: {color: '#004CFF'},
+										viewWindow: {min: 0}
+									},
+									1: {
+										title: 'Energy (kWh)',
+										format: 'decimal',
+										textStyle: {color: '#FF0000'},
+										titleTextStyle: {color: '#FF0000'},
+										viewWindow: {min: 0},
+                                        gridlines: {count: 0}
+									}
+								},
+								legend: {
+									position: 'none'
+								},
+								chartArea: {
+									width: '72%',
+									height: '85%'
+								}
+							};
+							var chart = new google.visualization.AreaChart(document.getElementById('chart_div'));
+							chart.draw(data, options);
+						}
+					</script>
+				</head>
+				<body>
+					<div id="chart_div"></div>
+				</body>
+			</html>
+		"""
+	render contentType: "text/html", data: html, status: 200
 }

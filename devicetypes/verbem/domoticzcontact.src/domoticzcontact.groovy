@@ -14,7 +14,7 @@
  *
  */
 metadata {
-	definition (name: "domoticzContact", namespace: "verbem", author: "Martin Verbeek", vid : "generic-contact") {
+	definition (name: "domoticzContact", namespace: "verbem", author: "Martin Verbeek", vid : "generic-contact", ocfDeviceType: "x.com.st.d.sensor.contact") {
 		capability "Actuator"
 		capability "Contact Sensor"
 		capability "Refresh"

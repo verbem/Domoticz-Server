@@ -91,7 +91,7 @@ private getIDXAddress() {
     if (!idx) {
         def parts = device.deviceNetworkId.split(":")
         if (parts.length == 3) {
-            idx = parts[2]
+            idx = parts[2] 
         } else {
             log.warn "Can't figure out idx for device: ${device.id}"
         }

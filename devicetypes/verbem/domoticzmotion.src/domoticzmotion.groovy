@@ -7,7 +7,7 @@
  *
  */
 metadata {
-	definition (name: "domoticzMotion", namespace: "verbem", author: "SmartThings", vid : "generic-motion-7") {
+	definition (name: "domoticzMotion", namespace: "verbem", author: "SmartThings", vid : "generic-motion-7", ocfDeviceType: "x.com.st.d.sensor.motion") {
     	capability "Configuration"
 		capability "Motion Sensor"
 		capability "Sensor"

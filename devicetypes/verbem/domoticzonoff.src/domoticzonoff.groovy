@@ -40,18 +40,6 @@ metadata {
         capability "Power Meter"
         capability "Energy Meter"
         capability "Power Consumption Report"
-
-		//attribute "powerToday", "String"
-
-        // custom commands
-        //command "hourLog"
-        //command	"day"
-        //command "week"
-        //command "month"
-        //command "year"
-        
-        //attribute "hour", "string"
-        //attribute "graph", "string"
     }
 
     tiles(scale:2) {
@@ -91,8 +79,7 @@ metadata {
         
         valueTile("powerConsumptionTile", "device.powerConsumption", width: 6, height: 2) {
         	state "powerConsumption", label:'${currentValue}', defaultState: true
-    }
-
+    	}
 
 		standardTile("refresh", "device.motion", decoration: "flat", width:1, height:1) {
             state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
@@ -114,16 +101,10 @@ metadata {
 		childDeviceTile("sensorSignalStrength", "Signal Strength", decoration: "flat", width: 1, height: 1, childTileName: "sensorSignalStrength")   
 		childDeviceTile("sensorBattery", "Battery", decoration: "flat", width: 2, height: 2, childTileName: "sensorBattery")   
 
-		//childDeviceTile("graph", "Graph", decoration: "flat", width: 6, height: 4, childTileName: "graph")   
-		//childDeviceTile("day", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "day")   
-		//childDeviceTile("week", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "week")   
-		//childDeviceTile("month", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "month")   
-		//childDeviceTile("year", "Graph", decoration: "flat", width: 1, height: 1, childTileName: "year")   
-
         main(["richDomoticzOnOff"])
         details(["richDomoticzOnOff", "Group Off", "Group Mood 1", "Group Mood 2", "Group Mood 3", "Group Mood 4", "Group Mood 5",
         	"Effect None", "Effect Colorloop", "Alert None", "Alert Select", "Alert Lselect",
-        	"sensorSignalStrength", "sensorBattery", "day", "week", "month", "year", "graph", "powerConsumptionTile", "refresh"])
+        	"sensorSignalStrength", "sensorBattery",  "powerConsumptionTile", "refresh"])
     }
 }
 
@@ -158,7 +139,6 @@ def off() {
 
 // Custom setlevel() command handler
 def setLevel(level) {
-	//if (parent.name.matches("Domoticz Server|Hue Sensor (Connect)") == false) return
     
     TRACE("setLevel Level " + level)
     state.setLevel = level
@@ -183,13 +163,26 @@ def setColor(color) {
     }
     
 	def hexCode = null
-
+    def colorRGB
+    
+    if (!color.level ) color.level = 50
+    if (color.saturation && color.hue) {
+    	colorRGB = hslToRgb(color.hue, color.saturation, color.level)
+        log.trace "HSL to HEX " + colorUtil.rgbToHex(colorRGB.r.toInteger(),colorRGB.g.toInteger(),colorRGB.b.toInteger())-"#" + " " +  colorRGB
+    }
+    if (color.red && color.green && color.blue) log.trace "RGB to HEX " + colorUtil.rgbToHex(color.red.toInteger(),color.green.toInteger(),color.blue.toInteger())-"#"
+    
     if (!color?.hex) {
         //hue:83, saturation:100, level:80
-        log.trace color
-        if (!color.level ) color.level = 80
-        TRACE("SetColor HUE " + (color.hue*3.6) + " Sat " + Math.round(color.saturation) + " Level " + color.level)
         if (parent) {
+        
+            colorRGB = hslToRgb(color.hue, color.saturation, color.level)
+            hexCode = colorUtil.rgbToHex(colorRGB.r.toInteger(),colorRGB.g.toInteger(),colorRGB.b.toInteger())-"#" 
+        	TRACE("SetColor (ST Cloud) HEX " + hexCode + " Sat " + Math.round(color.saturation) + " Level " + state.setLevel)
+            
+            if (colorRGB.a == true) "Achromatic request"
+			hexCode = null
+            
             if (color.hue == 5 && color.saturation == 4) {
                 hexCode = "FEFFFA"
                 log.debug "Soft White - Default ${hexCode}"
@@ -206,6 +199,12 @@ def setColor(color) {
                 hexCode = "FFFAEE"
                 log.debug "Warm White - Relax ${hexCode}"
             }
+
+            //else if (color.saturation ==0) { // achromatic
+            //	colorRGB = hslToRGB(color.hue, color.saturation, color.level)
+            //	hexCode = colorUtil.rgbToHex(color.level, color.level, color.level)
+            //}
+            
             if (hexCode == null) {
                 log.trace "normal"
                 if (parent.name == "Domoticz Server") parent.domoticz_setcolorHue(getIDXAddress(), (color.hue*3.6), Math.round(color.saturation), color.level)
@@ -219,16 +218,23 @@ def setColor(color) {
         }
     }
     else {
-        log.trace color
-        TRACE("SetColor HEX " + color.hex[-6..-1] + " Sat " + Math.round(color.saturation) + " Level " + state.setLevel)
+        TRACE("SetColor (device color picker) HEX " + color.hex - "#" + " Sat " + Math.round(color.saturation) + " Level " + state.setLevel)
         if (parent) {
-            if (parent.name == "Domoticz Server") parent.domoticz_setcolor(getIDXAddress(), color.hex[-6..-1], Math.round(color.saturation), state.setLevel)
+            if (parent.name == "Domoticz Server") parent.domoticz_setcolor(getIDXAddress(), color.hex - "#", Math.round(color.saturation), state.setLevel)
             if (parent.name == "Hue Sensor (Connect)") parent.groupCommand(["command" : "hue", "dni": device.deviceNetworkId, "level": state.setLevel, "hue": color.hue, "sat": color.saturation])                        
         }
     }
     sendEvent(name: "color", value: [hue: color.hue.toInteger(), saturation: color.saturation.toInteger()])
     sendEvent(name: "switch", value: "on")
 
+}
+
+def getWhite(value) {
+	log.debug "getWhite($value)"
+	def level = Math.min(value as Integer, 99)    
+    level = 255 * level/99 as Integer
+	log.debug "level: ${level}"
+	return level
 }
 
 def parse(Map message) {
@@ -379,344 +385,12 @@ private getIDXAddress() {
     return idx
 }
 
-def getWhite(value) {
-	log.debug "getWhite($value)"
-	def level = Math.min(value as Integer, 99)    
-    level = 255 * level/99 as Integer
-	log.debug "level: ${level}"
-	return level
-}
-
-// Graph related commands
-
-def hourLog() {
-    if (parent.name == "Domoticz Server") {
-    	sendEvent(name:"hour", value:"Graph")
-    	sendLightlogRequest()    	
-    }
-    else sendEvent(name:"hour", value:"noGraph")
-}
-
-def day() {
-    sendPowerChartRequest("day")	
-}
-
-def week() {
-    sendPowerChartRequest("week")	
-}
-
-def month() {
-    sendPowerChartRequest("month")	
-}
-
-def year() {
-    sendPowerChartRequest("year")	
-}
-
-private def createDaily(result) {
-    
-	result.each { value ->
-        state.chd = state.chd + value.v + "," 
-        state.chxl = state.chxl + value.d.split()[1] + "%7C"
-    }
-}
-
-private def createMonthkyOrWeekly(result) {
-    
-	result.each { value ->
-        state.chd = state.chd + value.v + "," 
-        state.chxl = state.chxl + value.d + "%7C"
-    }
-}
-
-private def createYearly(result) {
-	
-    def weeks = [:]
-    def weekno
-	def date 
-    
-	result.each { value ->
-        date = new Date().parse('yyyy-MM-dd', "${value.d}")
-        weekno = "${date.getAt(Calendar.YEAR)}-${date.getAt(Calendar.WEEK_OF_YEAR)}"
-        if (weeks[weekno]) weeks[weekno] = weeks[weekno] + value.v.toFloat()
-        else weeks[weekno] = value.v.toFloat()
-    }
-      
-    weeks.each { key, item ->
-        state.chd = state.chd + item.round(3) + "," 
-        state.chxl = state.chxl + key + "%7C"
-    }
-}
-
-private def sendPowerChartRequest(range) {
-
-	def idx = parent.state.devices[getIDXAddress()].idxPower
-    if (!idx) return
-
-	def power = device.currentValue("power")
-    
-    if (parent.name == "Domoticz Server" && power != null) {
-    	sendEvent(name:"graph", value:"Graph")
-    }
-    else {
-    	sendEvent(name:"graph", value:"noGraph")
-        return
-	}
-    
-    def rooPath = "/json.htm?type=graph&sensor=counter&idx=${idx}&range=${range}"
-	def hubAction = new physicalgraph.device.HubAction(method: "GET", path: rooPath, headers: [HOST: "${parent.settings.domoticzIpAddress}:${parent.settings.domoticzTcpPort}"], null, [callback: handlerPowerChartRequest] )
-    sendHubCommand(hubAction)
-}
-
-def handlerPowerChartRequest(evt) {
-
-    def response = getResponse(evt)
-
-	if (response?.result == null) return
-    
-    sendEvent(name:"${response.title.split()[2]}", value:"Graph")
-    state.chd = "t:"
-    state.chxl = "0:%7C"
-    
-    switch (response.title.split()[2]) {
-        case "day":
-	        state.chtt  = "Day+Usage"
-            createDaily(response.result)
-	        break;
-        case "week":
-	        state.chtt  = "Week+Usage"
-            createMonthkyOrWeekly(response.result)
-            break;
-        case "month":
-	        state.chtt  = "Month+Usage"
-            createMonthkyOrWeekly(response.result)
-            break;
-        case "year":
-	        state.chtt  = "Year+Usage"
-        	createYearly(response.result)
-        	break;
-    }
-	// this will also make a series of 1 valid for image-charts
-    state.chd = state.chd + 0
-    state.chxl = state.chxl + "%7C"
-
-	state.chco = "0000FF"
-
-    getChildDevices().each { child ->
-        if (child.deviceNetworkId.contains("Graph")) child.take([chd: state.chd, chxl:state.chxl, chco:state.chco, chtt:state.chtt])   	
-    }	
-}
-
-private def sendLightlogRequest() {
-	def idx = getIDXAddress()
-
-    if (!idx) return
-
-    sendEvent(name:"hour", value:"Graph")
-    def rooPath = "/json.htm?type=lightlog&idx=${idx}"
-	def hubAction = new physicalgraph.device.HubAction(method: "GET", path: rooPath, headers: [HOST: "${parent.settings.domoticzIpAddress}:${parent.settings.domoticzTcpPort}"], null, [callback: handler48HourRequest] )
-    sendHubCommand(hubAction)
-}
-
-void handler48HourRequest(evt) {
-    def response = getResponse(evt)
-
-	if (response?.result == null) {
-    	sendEvent(name:"hour", value:"noGraph")
-    	return
-    }
-    
-    initUsageMap()
-    
-// find the index in events that is the first with a lower date than the last entry in usageMap
-    def dateItem
-    def date48 = state.usageMap[48].startHour
-    def breakEach = false
-    def lastIndex
-    
-    response.result.eachWithIndex { item, index ->
-		dateItem = new Date().parse('yyyy-MM-dd hh:mm:ss', "${item.Date}")
-        if (item.Status.contains("Set")) item.Status = "On"
-        if (dateItem < date48 && breakEach == false) {
-        	breakEach = true
-            lastIndex = item.idx
-        }
-    }
-// eventmap with needed entries in reverse!
-	def eventMap = response.result.findAll {it.idx >= lastIndex}
-    eventMap = eventMap.reverse()
-    def nextIndex = 0 
-    def removeList = []
-    
-    eventMap.eachWithIndex { item, index ->
-    	nextIndex++
-    	if (nextIndex < eventMap.size() ) {       	
-        	if (item.Status == eventMap[nextIndex].Status) {
-                removeList = removeList << nextIndex
-            }
-        }
-    }
-    removeList.reverseEach {
-    	eventMap.remove(it)
-    }
-    log.trace "The eventmap size is ${eventMap.size()}"
-    
-// Create the usage Map, only ON is needed, the remainder is OFF
-    def tz = location.timeZone as TimeZone
-    def date = new Date().format("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone(tz.ID))
-    def nowDate = new Date().parse('yyyy-MM-dd HH', "${date}")
-
-	nextIndex = 0
-    long secondsDuration = 0
-    long secondsInitial = 0
-    long secondsRemaining = 0
-    long secondsLeftInHour = 3600
-    long startTime
-    long stopTime
-    def startDate
-    def stopDate
-    def eventHour = 48
-
-    eventMap.eachWithIndex { item, index ->
-    	nextIndex++
-		secondsRemaining = 0
-        
-        if (index == 0) startDate = state.usageMap[48].startHour
-        else startDate = new Date().parse('yyyy-MM-dd HH:mm:ss', "${item.Date}")   
-        
-    	if (nextIndex < eventMap.size() ) {            
-          	stopDate = new Date().parse('yyyy-MM-dd HH:mm:ss', "${eventMap[nextIndex].Date}")
-        }
-        else {
-        	stopDate = nowDate
-        }
-
-		startTime = startDate.getTime()         
-        stopTime = stopDate.getTime()
-        secondsDuration = Math.abs(stopTime-startTime)/1000  // seconds                        
-        log.info "${index} : ${item.Status} for ${secondsDuration} seconds, start ${startDate}, stop ${stopDate}, initial ${secondsInitial}"
-		
-        if (secondsInitial > 0 && secondsInitial <= secondsLeftInHour) {
-        	eventHour = eventHour-1
-            if (item.Status == "Off") state.usageMap[eventHour].On = secondsInitial // this is remainder of ON status, but current status is off
-            secondsLeftInHour = secondsLeftInHour - secondsInitial 
-        }
-        
-        if (secondsDuration <= secondsLeftInHour) {
-        	if (item.Status == "On") state.usageMap[eventHour].On = state.usageMap[eventHour].On + secondsDuration
-            secondsLeftInHour = secondsLeftInHour - secondsDuration 
-        }
-        else {
-        	if (item.Status == "On") state.usageMap[eventHour].On = state.usageMap[eventHour].On + secondsLeftInHour
-            secondsLeftInHour = 3600
-            secondsRemaining = secondsDuration - secondsLeftInHour
-
-            for (secondsRemaining; secondsRemaining >= 3600; secondsRemaining=secondsRemaining-3600) {
-                eventHour = eventHour-1 
-                try {
-                    if (item.Status == "On" && secondsRemaining >= 3600) state.usageMap[eventHour].On = 3600
-                }
-                catch (e) {
-                    log.error eventHour
-                }
-            }
-            if (secondsRemaining > 0 && eventMap.size() == 1) {            
-            	eventHour = eventHour - 1
-                state.usageMap[eventHour].On = secondsRemaining
-            }
-            
-            secondsInitial = secondsRemaining
-            secondsLeftInHour = 3600 - secondsRemaining
-        }     
-    }   
-    
-    state.chd = ""
-    def seriesOn = ""
-    def labels = "0:%7C"
-    float On 
-    float Off
-    
-    state.usageMap.each { key, item ->
-		On = item.On / 60
- 		seriesOn = seriesOn + "${On.toInteger()},"
-        labels = labels + "${item.hourLabel}%7C"
-    }
-    seriesOn = seriesOn.substring(0, seriesOn.length() - 1)
-    labels = labels.substring(0, labels.length() - 3)
-    state.chd = seriesOn
-    state.chxl = labels
-    takeLightLog()
-}
-
-def take() {
-	log.debug "Take()"
-}
-
-def takeLightLog() {
-	log.debug "TakeLightLog()"
-	def imageCharts = "https://image-charts.com/chart?"
-//	def params = [uri: "${imageCharts}chs=900x480&chd=t:${state.chd}&cht=lc&chls=5&chds=a&chxt=x,y&chf=c,s,EFEFEF&chxr=0,1,48,4&chts=0000FF,20&chco=00a0dc&chtt=48+hours+of+LightLog"]
-	def params = [uri: "${imageCharts}chs=900x480&chd=t:${state.chd}&chxl=${state.chxl}&cht=bvg&chls=5&chds=a&chxt=x,y&chts=0000FF,20&chco=00a0dc&chtt=48+hours+of+LightLog"]
-    
-    if (state.imgCount == null) state.imgCount = 0
- 	log.info params
-    try {
-        httpGet(params) { response ->
-        	
-            if (response.status == 200 && response.headers.'Content-Type'.contains("image/png")) {
-                def imageBytes = response.data
-                if (imageBytes) {
-                    state.imgCount = state.imgCount + 1
-                    def name = "LightLog$state.imgCount"
-
-                    // the response data is already a ByteArrayInputStream, no need to convert
-                    try {
-                        storeImage(name, imageBytes, "image/png")
-                    } catch (e) {
-                        log.error "error storing image: $e"
-                    }
-                }
-            }
-        else log.error "wrong format of content"
-        }
-    } catch (err) {
-        log.error ("Error making request: $err")
-    }
-}
-
-private def initUsageMap() {
-	// init a map with the previous 48 hours
-
-    def tz = location.timeZone as TimeZone
-    def date = new Date().format("yyyy-MM-dd HH:mm:ss", TimeZone.getTimeZone(tz.ID))
-    def start = new Date().parse('yyyy-MM-dd HH', "${date}")
-    int hour
-    Calendar calendar = GregorianCalendar.getInstance(TimeZone.getTimeZone(tz.ID)); // creates a new calendar instance
-    state.usageMap = [:]
-      
-    use (TimeCategory) {
-    	def i
-    	for (i=1 ; i<49 ; i++) {
-            start = start-1.hour
-			calendar.setTime(start);   // assigns calendar to given date 
-			hour = calendar.get(Calendar.HOUR_OF_DAY); // gets hour in 24h format
-            state.usageMap[i] = [startHour: start, On: 0, hourLabel: hour]
-        }
-    } 
-}
-
-private def getResponse(evt) {
-
-    if (evt instanceof physicalgraph.device.HubResponse) {
-        return evt.json
-    }
-}
-
 def installed() {
 	initialize()
 }
 
 def updated() {
+
 	initialize()
 }
 
@@ -730,4 +404,47 @@ def initialize() {
     	log.error "You cannot use this DTH without the related SmartAPP Domoticz Server, the device needs to be a child of this App"
         sendEvent(name: "switch", value: "Error", descriptionText: "$device.displayName You cannot use this DTH without the related SmartAPP Domoticz Server", isStateChange: true)
     }
+}
+
+/**
+     * Converts an HSL color value to RGB. Conversion formula
+     * adapted from http://en.wikipedia.org/wiki/HSL_color_space.
+     * Assumes h, s, and l are contained in the set [0, 1] and
+     * returns r, g, and b in the set [0, 255].
+     *
+     * @param   {number}  h       The hue
+     * @param   {number}  s       The saturation
+     * @param   {number}  l       The lightness
+     * @return  {Array}           The RGB representation added with an indicator for achromatic true or false
+     */
+def hslToRgb(h, s, l){
+		h = h / 100
+        s = s / 100
+        l = l / 100
+        log.trace "H ${h}" + " S ${s}" + " L ${l}"
+        def r, g, b, a;
+
+        if(s == 0){
+            r = g = b = l; // achromatic
+            a = true
+        }
+        else{
+           	def q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            def p = 2 * l - q;
+            r = hue2rgb(p, q, h + 1/3);
+            g = hue2rgb(p, q, h);
+            b = hue2rgb(p, q, h - 1/3);
+            a = false
+        }
+
+        return [r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255), a: a];
+    }
+    
+def hue2rgb(p, q, t){
+    if(t < 0) t += 1;
+    if(t > 1) t -= 1;
+    if(t < 1/6) return p + (q - p) * 6 * t;
+    if(t < 1/2) return q;
+    if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
 }
