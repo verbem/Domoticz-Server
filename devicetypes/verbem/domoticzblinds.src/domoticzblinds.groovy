@@ -9,6 +9,7 @@
  *	4.2	2018-06-02 Moved EOD processing to SM
  *	4.3	2018-06-21 Removed calibrate, moved it to timed session capability
  * 	4.4 2019-03-16 presetPosition gone as a command for windowshades???? named it in commands
+ * 	4.5 2019-03-30 added window shade preset capability
  */
 import groovy.time.TimeCategory 
 import groovy.time.TimeDuration
@@ -27,10 +28,11 @@ metadata {
         capability "Signal Strength"
 		capability "Health Check"
         capability "Window Shade"
+        capability "Window Shade Preset"
         capability "Configuration"
         capability "Timed Session"
         
-        command "presetPosition"
+        //command "presetPosition"
 
     }
 
