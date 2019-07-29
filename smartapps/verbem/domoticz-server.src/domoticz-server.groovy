@@ -2087,8 +2087,12 @@ private def socketSend(passed) {
          case "SetPoint":  
          	hubPath = "/json.htm?type=setused&idx=${passed.idx}&setpoint=${passed.setpoint}&mode=ManualOverride&until=&used=true"
             break;
-         case "SetContact":  
-         	hubPath = "/json.htm?type=command&param=udevice&idx=${passed.idx}&nvalue=${passed.nvalue}"
+         case "SetContact":
+         	def OnOff = "On"
+         	if (passed.nvalue == 0) OnOff = "Off" 
+
+         	hubPath = "/json.htm?type=command&param=switchlight&idx=${passed.idx}&switchcmd=${OnOff}"
+         	//hubPath = "/json.htm?type=command&param=udevice&idx=${passed.idx}&nvalue=${passed.nvalue}"
             break;
          case "SetLux":  
          	hubPath = "/json.htm?type=command&param=udevice&idx=${passed.idx}&svalue=${passed.lux}"
