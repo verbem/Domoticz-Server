@@ -336,7 +336,7 @@ private def setupDomoticz() {
 
     return dynamicPage(pageProperties) {
       section {
-            input "domoticzIpAddress", "string", title: "Local Domoticz IP Address", submitOnChange: true, defaultValue: "0.0.0.0"
+            input "domoticzIpAddress", "text", title: "Local Domoticz IP Address", submitOnChange: true, defaultValue: "0.0.0.0"
             input "domoticzTcpPort", "number", title: "Local Domoticz TCP Port", defaultValue: "8080"
             input "domoticzTypes","enum", title: "Devicetypes you want to add", options: ["Contact Sensors", "Dusk Sensors", "Motion Sensors", "On/Off/Dimmers/RGB", "Smoke Detectors", "Thermostats", "(Virtual) Sensors", "Window Coverings"], multiple: true
             if (settings.containsKey('domoticzIpAddress') && settings?.domoticzIpAddress != "0.0.0.0") input "domoticzRoomPlans", "bool", title: "Support Room Plans from Domoticz?", submitOnChange: true, defaultValue: false
