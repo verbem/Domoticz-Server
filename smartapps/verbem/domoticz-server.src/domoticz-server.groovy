@@ -1504,7 +1504,7 @@ def callbackForSettings(evt) {
         def postBody = getSettingsForm(response)      	
         def hubAction = new physicalgraph.device.HubAction(
                             method: "POST",
-                            path: "/storesettings.webem",
+                            path: "/storesettings",
                             requestContentType: "application/x-www-form-urlencoded",
                             headers: [HOST: "${state.networkId}"],
                             null,
