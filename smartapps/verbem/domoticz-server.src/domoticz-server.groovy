@@ -1174,7 +1174,7 @@ def callbackForEveryThing(evt) {
 		//TEMP		    	        
         if (it?.Type.contains("Temp")) {
         	state.optionsTemperature[it.idx] = "${it.idx} : ${it.Name}"
-            socketSend([request : "SensorTempNotification", idx : it.idx])
+            if (it.Notifications == "false") socketSend([request : "SensorTempNotification", idx : it.idx])
         }
         //MOTION
         if (it?.SwitchTypeVal == 8) {
@@ -1192,21 +1192,21 @@ def callbackForEveryThing(evt) {
         //LUX
         if (it?.Type == "Lux") {
         	state.optionsLux[it.idx] = "${it.idx} : ${it.Name}"
-            socketSend([request : "SensorLuxNotification", idx : it.idx])
+            if (it.Notifications == "false") socketSend([request : "SensorLuxNotification", idx : it.idx])
         }
         //THERMOSTAT
         if (it?.Type == "Thermostat") {
-            socketSend([request : "Notification", idx : it.idx, type:0, action:"%24value"])
+            if (it.Notifications == "false") socketSend([request : "Notification", idx : it.idx, type:0, action:"%24value"])
         }
         //HUMIDITY
         if (it?.Humidity) {
         	state.optionsHumidity[it.idx] = "${it.idx} : ${it.Name}"
-            socketSend([request : "SensorHumidityNotification", idx : it.idx])
+            if (it.Notifications == "false") socketSend([request : "SensorHumidityNotification", idx : it.idx])
         }
         //SOUND
         if (it?.SubType == "Sound Level") {
         	state.optionsSound[it.idx] = "${it.idx} : ${it.Name}"
-            socketSend([request : "SensorSoundNotification", idx : it.idx])
+            if (it.Notifications == "false") socketSend([request : "SensorSoundNotification", idx : it.idx])
         }
         //CUSTOM
         if (it?.Type == "General") {
@@ -1218,17 +1218,17 @@ def callbackForEveryThing(evt) {
         //AIR QUAILTY
         if (it?.Type == "Air Quality") {
         	state.optionsAirQuality[it.idx] = "${it.idx} : ${it.Name}"
-            socketSend([request : "SensorAirQualityNotification", idx : it.idx])
+            if (it.Notifications == "false") socketSend([request : "SensorAirQualityNotification", idx : it.idx])
         }
         //PRESSURE
         if (it?.Barometer) {
         	state.optionsPressure[it.idx] = "${it.idx} : ${it.Name}"
-            socketSend([request : "SensorPressureNotification", idx : it.idx])
+            if (it.Notifications == "false") socketSend([request : "SensorPressureNotification", idx : it.idx])
         } 
         //USAGE ENERGY (P1 meters)
         if (it?.Type == "P1 Smart Meter" && it?.SubType == "Energy") {
         	state.optionsPower[it.idx] = "${it.idx} : ${it.Name}"
-        	socketSend([request : "SensorKWHNotification", idx : it.idx])	
+        	if (it.Notifications == "false") socketSend([request : "SensorKWHNotification", idx : it.idx])	
     		if (settings.domoticzReportPower && statePower?.idxPower == it.idx) {
                 devReportPower = getChildDevice(state.devReportPower)
                 if (devReportPower) {
@@ -1255,7 +1255,7 @@ def callbackForEveryThing(evt) {
         //USAGE POWER
         if (it?.SubType == "kWh") {	
         	state.optionsPower[it.idx] = "${it.idx} : ${it.Name}"             
-            socketSend([request : "SensorKWHNotification", idx : it.idx])   
+            if (it.Notifications == "false") socketSend([request : "SensorKWHNotification", idx : it.idx])   
             kwh = kwh + Float.parseFloat(it.Data.split()[0])
             watt = watt + Float.parseFloat(it.Usage.split()[0])
             
@@ -1294,7 +1294,7 @@ def callbackForEveryThing(evt) {
 		//USAGE GAS
         if (it?.SubType == "Gas") {	
         	state.optionsGas[it.idx] = "${it.idx} : ${it.Name}"       
-			socketSend([request : "SensorGasNotification", idx : it.idx])
+			if (it.Notifications == "false") socketSend([request : "SensorGasNotification", idx : it.idx])
             gasTotal = gasTotal + Float.parseFloat(it.Counter)
             gasUsage = gasUsage + Float.parseFloat(it.CounterToday.split()[0])
 
