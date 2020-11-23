@@ -140,7 +140,8 @@ private def setupMenu() {
 		state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
 		urlCAH = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
         if (!state.validUrl) state.validUrl = false
-        socketSend([request: "Settings"])
+	// Broken Domoticz settings
+        //socketSend([request: "Settings"])
         pause 5
     }
 
@@ -421,7 +422,7 @@ private def setupRefreshToken() {
     def token = createAccessToken()
     
     state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
-	socketSend([request: "Settings"])
+    //socketSend([request: "Settings"])
     def pageProperties = [
         name        : "setupRefreshToken",
         title       : "Refresh the access Token",
@@ -504,7 +505,7 @@ def uninstalled() {
 
 private def initialize() {
     TRACE("[Initialize] ${app.name} ${app.label}. ${textVersion()}. ${textCopyright()}")
-    socketSend([request: "Settings"])    
+    //socketSend([request: "Settings"])    
     notifyNewVersion()
     
     unschedule()    
