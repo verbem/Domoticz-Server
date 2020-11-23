@@ -329,7 +329,7 @@ private def setupDomoticz() {
     def pageProperties = [
         name        : "setupDomoticz",
         title       : "Configure Domoticz Server",
-        nextPage    : "setupMenu",
+        nextPage    : null,
         install     : false,
         uninstall   : false
     ]
