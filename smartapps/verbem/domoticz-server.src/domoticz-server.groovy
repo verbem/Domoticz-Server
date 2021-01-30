@@ -140,7 +140,8 @@ private def setupMenu() {
 		state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
 		urlCAH = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
         if (!state.validUrl) state.validUrl = false
-        socketSend([request: "Settings"])
+	// Broken Domoticz settings
+        //socketSend([request: "Settings"])
         pause 5
     }
 
@@ -329,14 +330,14 @@ private def setupDomoticz() {
     def pageProperties = [
         name        : "setupDomoticz",
         title       : "Configure Domoticz Server",
-        nextPage    : "setupMenu",
+        nextPage    : null,
         install     : false,
         uninstall   : false
     ]
 
     return dynamicPage(pageProperties) {
       section {
-            input "domoticzIpAddress", "string", title: "Local Domoticz IP Address", submitOnChange: true, defaultValue: "0.0.0.0"
+            input "domoticzIpAddress", "text", title: "Local Domoticz IP Address", submitOnChange: true, defaultValue: "0.0.0.0"
             input "domoticzTcpPort", "number", title: "Local Domoticz TCP Port", defaultValue: "8080"
             input "domoticzTypes","enum", title: "Devicetypes you want to add", options: ["Contact Sensors", "Dusk Sensors", "Motion Sensors", "On/Off/Dimmers/RGB", "Smoke Detectors", "Thermostats", "(Virtual) Sensors", "Window Coverings"], multiple: true
             if (settings.containsKey('domoticzIpAddress') && settings?.domoticzIpAddress != "0.0.0.0") input "domoticzRoomPlans", "bool", title: "Support Room Plans from Domoticz?", submitOnChange: true, defaultValue: false
@@ -421,7 +422,7 @@ private def setupRefreshToken() {
     def token = createAccessToken()
     
     state.urlCustomActionHttp = getApiServerUrl() - ":443" + "/api/smartapps/installations/${app.id}/" + "EventDomoticz?access_token=" + state.accessToken + "&message=#MESSAGE"
-	socketSend([request: "Settings"])
+    //socketSend([request: "Settings"])
     def pageProperties = [
         name        : "setupRefreshToken",
         title       : "Refresh the access Token",
@@ -504,7 +505,7 @@ def uninstalled() {
 
 private def initialize() {
     TRACE("[Initialize] ${app.name} ${app.label}. ${textVersion()}. ${textCopyright()}")
-    socketSend([request: "Settings"])    
+    //socketSend([request: "Settings"])    
     notifyNewVersion()
     
     unschedule()    
@@ -1504,7 +1505,7 @@ def callbackForSettings(evt) {
         def postBody = getSettingsForm(response)      	
         def hubAction = new physicalgraph.device.HubAction(
                             method: "POST",
-                            path: "/storesettings.webem",
+                            path: "/storesettings",
                             requestContentType: "application/x-www-form-urlencoded",
                             headers: [HOST: "${state.networkId}"],
                             null,
